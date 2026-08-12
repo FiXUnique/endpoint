@@ -1,0 +1,78 @@
+name: Build release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: endpoint-windows-x64
+            archive: endpoint-windows-x64.zip
+          - os: ubuntu-latest
+            artifact: endpoint-linux-x64
+            archive: endpoint-linux-x64.tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.16.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pyinstaller --noconfirm --clean --distpath packaged --workpath build/pyinstaller packaging/endpoint.spec
+      - name: Package Windows application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path staging/endpoint-windows-x64 | Out-Null
+          Copy-Item packaged/endpoint.exe staging/endpoint-windows-x64/
+          Copy-Item README.md,LICENSE,RELEASE_NOTES.md staging/endpoint-windows-x64/
+          Compress-Archive -Path staging/endpoint-windows-x64 -DestinationPath endpoint-windows-x64.zip
+      - name: Package Linux application
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p staging/endpoint-linux-x64
+          cp packaged/endpoint README.md LICENSE RELEASE_NOTES.md staging/endpoint-linux-x64/
+          chmod +x staging/endpoint-linux-x64/endpoint
+          tar -czf endpoint-linux-x64.tar.gz -C staging endpoint-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" artifacts/*
+          --title "Endpoint $GITHUB_REF_NAME"
+          --notes-file RELEASE_NOTES.md
+          --verify-tag

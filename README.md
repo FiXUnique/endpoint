@@ -1,125 +1,181 @@
 # Endpoint
 
-**Evidence-first, open-source on-chain investigations.**
+**Open-source Solana fund-flow investigation with evidence you can inspect.**
 
-Endpoint is an investigator-oriented platform for answering a difficult question from public
-blockchain data: **where did the money ultimately go?** The first vertical slice traces a Solana
-wallet's recent transaction history, normalizes native and SPL-token transfers, builds an
-interactive fund-flow graph, supports recursive wallet expansion, preserves transaction evidence,
-and separates confirmed facts from scored heuristics.
+Endpoint helps an investigator follow public blockchain transfers from a starting wallet and answer:
 
-> [!IMPORTANT]
-> Endpoint does not identify people, determine guilt, or treat correlation as ownership. An
-> evidence score measures the strength of configured observable signals. It is not a probability
-> that two addresses share an owner.
+> Where did the money move, which wallets appear connected, and what evidence supports that view?
 
-## What works today
+Paste a Solana wallet address. Endpoint retrieves recent real mainnet transactions, extracts supported
+SOL and SPL-token transfers, draws an interactive directed graph, and lets you expand any observed
+wallet. Every solid edge links back to a transaction signature, slot, timestamp, amount, and parsed
+instruction. Inferred relationships remain dashed, scored, and explained.
 
-- Live Solana mainnet JSON-RPC ingestion (`getSignaturesForAddress` + parsed transactions)
-- Normalized SOL and SPL-token transfers, including inner instructions where RPC parsing exists
-- Interactive Cytoscape fund-flow graph with fact/heuristic visual separation
-- Click-through evidence inspection for every edge
-- Recursive expansion of any observed wallet
-- Deterministic common-funder and temporal-proximity heuristics
-- Candidate consolidation ranking based on observed multi-source convergence
-- Explicit RPC-limit/truncation notices
-- Durable SQLite investigation snapshots and JSON evidence export
-- Clearly labelled, reproducible synthetic demonstration
-- Chain-neutral adapter and persistence boundaries for future extension
+Endpoint does **not** identify people, prove wallet ownership, decide that a crime occurred, or claim
+that a consolidation wallet is an exchange exit.
 
-The current slice accepts **wallet addresses**. Token-mint launch reconstruction, protocol
-decoders, bundle detection, historical campaigns, cross-chain bridges, PDF reports, and live
-monitoring are roadmap work—not hidden or simulated features.
+## Download the app
 
-## Quick start
+The easiest way to use Endpoint is the packaged release. It does not require Python, Node.js, Docker,
+PostgreSQL, or a browser extension.
 
-Requirements: Python 3.11+, Node.js 20+.
+[**Download Endpoint from GitHub Releases**](https://github.com/FiXUnique/endpoint/releases/latest)
+
+### Windows
+
+1. Download `endpoint-windows-x64.zip`.
+2. Extract it.
+3. Double-click `endpoint.exe`.
+4. Endpoint opens in your browser at `http://127.0.0.1:8765`.
+
+Windows SmartScreen may warn that the application is unrecognized because the open-source binary is
+not code-signed yet. Only run a binary downloaded from this repository's official Releases page.
+
+### Linux
+
+1. Download and extract `endpoint-linux-x64.tar.gz`.
+2. Run `./endpoint`.
+3. Open `http://127.0.0.1:8765` if a browser does not open automatically.
+
+Your saved investigations remain on your computer:
+
+- Windows: `%LOCALAPPDATA%\Endpoint\endpoint.db`
+- Linux: `~/.local/share/endpoint/endpoint.db`
+
+Use another Solana RPC provider when the public endpoint rate-limits you:
+
+```text
+endpoint.exe --rpc-url https://your-solana-rpc.example
+./endpoint --rpc-url https://your-solana-rpc.example
+```
+
+## What an investigation does
+
+Suppose funds leave one wallet, split across three wallets, and later converge:
+
+```text
+Seed wallet
+    |-- 18.5 SOL --> Wallet A --\
+    |-- 16.0 SOL --> Wallet B ----> Possible consolidation point --> Service
+    '-- 15.5 SOL --> Wallet C --/
+```
+
+Endpoint turns the observable part of that flow into:
+
+1. **Confirmed transfer facts** - solid arrows parsed from public transaction instructions.
+2. **Evidence records** - signature, slot, timestamp, addresses, asset, amount, RPC source, and
+   retrieval time.
+3. **Relationship hypotheses** - dashed edges for reproducible signals such as a common funder and
+   close funding time.
+4. **Consolidation candidates** - wallets receiving from multiple observed graph addresses, ranked
+   for inspection.
+5. **Explicit limits** - a warning whenever an RPC transaction cap means the graph is incomplete.
+
+Clicking a transfer shows the transaction evidence. Clicking a dashed relationship shows each signal,
+its exact contribution to the evidence score, and the evidence IDs used. Clicking a wallet shows its
+observed incoming/outgoing activity and offers a bounded recursive expansion.
+
+## Current capabilities
+
+| Capability | Status | Meaning |
+| --- | --- | --- |
+| Solana wallet input | Available | Trace a base58 wallet address |
+| Real mainnet RPC ingestion | Available | Uses the configured Solana JSON-RPC endpoint |
+| SOL transfers | Available | Parses supported System Program transfers |
+| SPL-token transfers | Available | Parses supported SPL Token instructions and inner instructions |
+| Interactive graph | Available | Pan, zoom, select, and inspect nodes and edges |
+| Recursive wallet expansion | Available | Merge another bounded transaction slice into the case |
+| Common-funder/timing analysis | Available | Deterministic, evidence-linked heuristics |
+| Consolidation ranking | Available | Multi-source convergence inside the observed graph |
+| Saved cases and JSON export | Available | Local SQLite snapshots and portable evidence |
+| Synthetic demonstration | Available | Clearly labelled fake data using production analysis code |
+| Token-mint rug reconstruction | Planned | Deployer, launch, LP, holder, and post-rug workflow |
+| Pump.fun/bundle detection | Planned | Protocol decoding and launch-window coordination signals |
+| Historical campaign search | Planned | Requires indexed history and calibrated datasets |
+| Cross-chain/bridge correlation | Planned | Requires adapters and explicit uncertainty boundaries |
+| Real-world identity attribution | Not a goal | On-chain heuristics do not prove identity |
+
+This is a usable first vertical slice, not a finished commercial intelligence platform. Unsupported
+custom-program instructions are never invented or silently presented as decoded transfers.
+
+## Reading the graph safely
+
+Endpoint deliberately separates facts from inference:
+
+| Visual / class | Interpretation |
+| --- | --- |
+| Solid directed edge / `confirmed_fact` | A supported transfer instruction was observed on-chain |
+| Dashed edge / `heuristic_relationship` | Observable signals support a relationship worth inspecting |
+| Diamond node | Possible convergence point inside this bounded graph |
+| Evidence score | Strength of configured signals, **not** an ownership probability |
+| Truncation warning | RPC limits were reached; the result is incomplete |
+
+A shared funder can be an exchange, payroll wallet, airdrop distributor, relayer, or ordinary user.
+Convergence can be custody, a service, or routine treasury behavior. These patterns create leads, not
+attribution.
+
+See [the scoring methodology](docs/methodology.md) for the exact current formulas and calibration
+plan.
+
+## Use the synthetic walkthrough
+
+Choose **Open synthetic demo** on the landing page. It models a seed wallet splitting funds into three
+wallets that reconverge before a final transfer. The UI marks the fixture as **not on-chain data**.
+
+Use it to learn the interface:
+
+1. Select a solid arrow and inspect its evidence.
+2. Select a dashed relationship and inspect common-funder/timing contributions.
+3. Select the diamond wallet and read why it is a consolidation candidate.
+4. Compare the language used for a confirmed fact and a heuristic.
+
+The demo exercises the same graph and analysis code as live investigations. Its fake signatures never
+enter a production investigation.
+
+## Run with Docker
+
+Docker users can run the source checkout with:
 
 ```bash
+git clone https://github.com/FiXUnique/endpoint.git
+cd endpoint
+docker compose up --build
+```
+
+Then open `http://localhost:5173`.
+
+## Developer setup
+
+Requirements: Python 3.11+, Node.js 20+, pnpm 11.
+
+```bash
+git clone https://github.com/FiXUnique/endpoint.git
+cd endpoint
+
 python -m venv .venv
 source .venv/bin/activate       # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
-cp .env.example .env            # Windows: copy .env.example .env
-uvicorn endpoint.main:app --reload
-```
 
-In another terminal:
-
-```bash
 corepack enable
 pnpm install
 pnpm run dev
 ```
 
-Open `http://localhost:5173`. The API documentation is available at
-`http://localhost:8000/docs`.
-
-For sustained investigations, set `SOLANA_RPC_URL` to an RPC service you operate or are authorized
-to use. Public endpoints are rate-limited.
-
-### Docker Compose
+In another terminal:
 
 ```bash
-docker compose up --build
+uvicorn endpoint.main:app --reload
 ```
 
-## A complete workflow
+The development UI is at `http://localhost:5173`; API documentation is at
+`http://localhost:8000/docs`.
 
-1. Paste a Solana wallet address and choose a transaction limit.
-2. Endpoint retrieves real transactions from the configured RPC.
-3. Parsed SOL/SPL transfer instructions become immutable evidence records.
-4. Confirmed transfers render as solid directed edges.
-5. Reproducible relationships render as dashed edges with their component signals.
-6. Select any edge to inspect transaction signatures, slots, times, values, and explanations.
-7. Select a wallet and expand it to merge another bounded transaction slice.
-8. Export the saved evidence snapshot as JSON.
+To run the combined production-style application from source:
 
-The “Open synthetic demo” action demonstrates split and consolidation behavior without making
-network calls. Its fake addresses and signatures are visibly labelled and never enter production
-analysis paths.
-
-## Architecture
-
-```text
-React / Cytoscape UI
-        │ JSON/HTTP
-        ▼
-FastAPI investigation service
-        ├── ChainAdapter (chain-neutral)
-        │      └── SolanaAdapter (RPC + instruction normalization)
-        ├── deterministic graph / confidence analysis
-        └── snapshot repository (SQLite MVP; replaceable boundary)
+```bash
+pnpm run build
+endpoint
 ```
-
-The MVP intentionally remains a modular monolith. PostgreSQL, Redis, and background workers become
-useful when multi-user ingestion and longer traces arrive; requiring them now would make local use
-harder without improving this bounded workflow.
-
-- `backend/endpoint/chains/base.py`: adapter contract that analysis depends on
-- `backend/endpoint/chains/solana.py`: all Solana RPC and instruction-specific behavior
-- `backend/endpoint/analysis.py`: chain-neutral graph/evidence rules
-- `backend/endpoint/repository.py`: durable investigation snapshot boundary
-- `src/components/GraphCanvas.tsx`: graph rendering and interaction
-- `src/components/Inspector.tsx`: evidence and confidence explanations
-
-See [architecture](docs/architecture.md), [methodology](docs/methodology.md), and the
-[data model](docs/data-model.md) for the design rationale.
-
-## Confidence and evidence
-
-Endpoint uses four explicit certainty classes:
-
-| Class | Meaning |
-| --- | --- |
-| `confirmed_fact` | Directly parsed from public chain data |
-| `deterministic_relationship` | Necessarily derived from confirmed facts |
-| `heuristic_relationship` | Observable signals support a hypothesis |
-| `weak_correlation` | Evidence exists but remains low strength |
-
-Current heuristic scores use a versioned additive formula with capped contributions. For example,
-a common funder contributes `0.45`; funding within the same 120-second window contributes up to
-`0.20`. Every contribution points to evidence IDs. Scores are deterministic and testable, but not
-calibrated probabilities. See [methodology](docs/methodology.md).
 
 ## API
 
@@ -141,19 +197,51 @@ curl -X POST http://localhost:8000/api/v1/investigations/trace \
   -d '{"address":"YOUR_SOLANA_ADDRESS","signature_limit":25}'
 ```
 
-## Limitations
+## Architecture
 
-- Parsed transfers depend on the configured RPC's `jsonParsed` response. Unsupported or opaque
-  program instructions are preserved only by the upstream transaction, not falsely decoded.
-- The current trace is signature-count bounded and one address expansion at a time. Reaching a
-  limit is visibly reported.
-- Token-account ownership is inferred only from transaction token-balance metadata when present.
-- Consolidation candidates are convergence hypotheses, not verified exchanges, exit points, or
-  identity attribution.
-- Common funding can describe normal user or service behavior. It is evidence to inspect, not proof.
-- SQLite snapshots optimize local reproducibility, not multi-user concurrency or chain indexing.
+```text
+React + Cytoscape investigation UI
+                |
+                | same-origin JSON/HTTP
+                v
+FastAPI application
+    |-- chain-neutral investigation service
+    |-- deterministic graph and confidence analysis
+    |-- local snapshot repository
+    '-- Solana adapter
+          |-- JSON-RPC retrieval
+          '-- System/SPL instruction normalization
+```
 
-## Testing
+The packaged executable embeds the production UI and FastAPI service in one local process. Endpoint
+listens on loopback by default; live traces make outbound requests only to the configured Solana RPC.
+
+Chain-neutral code owns transfers, evidence, cases, graph relationships, limits, and exports.
+Solana-specific code owns JSON-RPC semantics, base58 validation, instruction parsing, token metadata,
+and future protocol decoders.
+
+Read more:
+
+- [Architecture and hard technical problems](docs/architecture.md)
+- [Normalized future data model](docs/data-model.md)
+- [Evidence and confidence methodology](docs/methodology.md)
+- [Phased roadmap](docs/roadmap.md)
+- [Release notes](RELEASE_NOTES.md)
+
+## Known limitations
+
+- The current seed type is a wallet address, not a token mint or transaction signature.
+- Only supported `jsonParsed` System/SPL instructions become transfers; opaque custom-program
+  semantics are not guessed.
+- One expansion fetches a bounded recent signature slice. Endpoint does not yet index full chain
+  history.
+- Public Solana RPC endpoints frequently rate-limit sustained investigations.
+- Token-account ownership depends on transaction token-balance metadata when present.
+- Scores are interpretable indices and have not yet been calibrated as probabilities.
+- SQLite is appropriate for a local single-user app, not a shared multi-user deployment.
+- Packaged binaries are not yet code-signed.
+
+## Verify or contribute
 
 ```bash
 ruff check .
@@ -163,32 +251,13 @@ pnpm test
 pnpm run build
 ```
 
-Fixtures test normalization, deterministic scores, evidence preservation, snapshot round-trips,
-and truthful demo labelling. Heuristic tests assert reproducible outputs and known limitations; they
-do not label every positive result as “correct ownership.” Future calibration uses labelled public
-datasets with train/evaluation separation and precision/recall by signal family.
-
-## Roadmap
-
-1. **Vertical slice (current):** live wallet tracing, normalization, graph, expansion, evidence,
-   transparent relationships, snapshots, export.
-2. **Solana depth:** mint entry points, Token-2022, balance-delta fallback, DEX/launchpad parsers,
-   Pump.fun lifecycle and bounded bundle analysis.
-3. **Investigation workflow:** case notes, manual labels with provenance, timelines, filters,
-   CSV/PDF reports, deterministic evidence archives.
-4. **Historical intelligence:** PostgreSQL ingestion, background jobs, entity catalogue, campaign
-   graph, calibrated heuristics and evaluation datasets.
-5. **Cross-chain:** EVM adapters, bridge event correlation with uncertainty boundaries, optional
-   live monitoring.
-
-## Open-source strategy and license
-
-Endpoint uses the [Apache License 2.0](LICENSE): permissive commercial use encourages adoption and
-integration, while explicit patent terms are valuable for an infrastructure/security project. The
-tradeoff is that commercial derivatives need not publish their modifications. A copyleft license
-would maximize code-sharing obligations but can reduce integration by exchanges and analytics
-teams. The open core here is deliberately useful; scale, private data, enterprise authentication,
-and proprietary attribution can remain separate without degrading public functionality.
+Heuristic tests assert deterministic formulas, evidence linkage, boundary behavior, and known
+ambiguities. They do not treat a heuristic positive as ground-truth wallet ownership.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+
+## License
+
+[Apache License 2.0](LICENSE). Commercial use and integration are allowed, and contributors receive
+explicit patent protection. Commercial derivatives are not required to publish their modifications.
