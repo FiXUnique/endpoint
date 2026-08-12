@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
 
 import type { Evidence, GraphEdge, Investigation, Selection } from "../types";
 
@@ -6,6 +6,31 @@ const GraphCanvas = lazy(async () => {
   const module = await import("./GraphCanvas");
   return { default: module.GraphCanvas };
 });
+
+class GraphErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[endpoint:graph] renderer failed", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="workspace-result-message graph-error" role="alert">
+          <strong>The graph could not be displayed</strong>
+          <p>Your investigation data is safe. Reload Endpoint or use Wallets, Relationships, Timeline, and Evidence in the sidebar.</p>
+          <button onClick={() => window.location.reload()}>Reload Endpoint</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export type InvestigationSection =
   | "fund-flow"
@@ -143,6 +168,7 @@ export function InvestigationWorkspace({
   section,
   onSelect,
 }: InvestigationWorkspaceProps) {
+  const hasRelationships = investigation.edges.length > 0;
   return (
     <section className="workspace">
       <div className="workspace-toolbar">
@@ -158,10 +184,22 @@ export function InvestigationWorkspace({
           )}
         </div>
       </div>
-      {section === "fund-flow" && (
-        <Suspense fallback={<div className="graph-loading">Preparing graph renderer…</div>}>
-          <GraphCanvas investigation={investigation} onSelect={onSelect} />
-        </Suspense>
+      {section === "fund-flow" && !hasRelationships && (
+        <div className="workspace-result-message" role="status">
+          <span className="result-glyph">0</span>
+          <strong>No supported transfers in this transaction slice</strong>
+          <p>
+            Endpoint reached Solana and inspected {investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions, but none contained parsed SOL or SPL-token transfers it can graph.
+          </p>
+          <p>Try a different wallet, raise the transaction limit, or inspect Wallets and Evidence.</p>
+        </div>
+      )}
+      {section === "fund-flow" && hasRelationships && (
+        <GraphErrorBoundary>
+          <Suspense fallback={<div className="graph-loading">Preparing graph renderer…</div>}>
+            <GraphCanvas investigation={investigation} onSelect={onSelect} />
+          </Suspense>
+        </GraphErrorBoundary>
       )}
       {section === "wallets" && <WalletList investigation={investigation} onSelect={onSelect} />}
       {section === "relationships" && (

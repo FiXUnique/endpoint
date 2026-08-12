@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import os
 import platform
+import socket
 import threading
 import webbrowser
 from pathlib import Path
@@ -34,6 +35,21 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def available_port(host: str, requested_port: int, attempts: int = 20) -> int:
+    """Return the requested local port or the next available one."""
+    for port in range(requested_port, requested_port + attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as candidate:
+                candidate.bind((host, port))
+        except OSError:
+            continue
+        return port
+    raise RuntimeError(
+        f"No available port found between {requested_port} and "
+        f"{requested_port + attempts - 1}."
+    )
+
+
 def main() -> None:
     args = build_parser().parse_args()
     database_path = (args.data_dir / "endpoint.db") if args.data_dir else default_database_path()
@@ -42,16 +58,22 @@ def main() -> None:
     if args.rpc_url:
         os.environ["SOLANA_RPC_URL"] = args.rpc_url
 
-    url = f"http://{args.host}:{args.port}"
+    port = available_port(args.host, args.port)
+    url = f"http://{args.host}:{port}"
     if not args.no_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
 
     import uvicorn
 
+    if port != args.port:
+        print(
+            f"Port {args.port} is already in use (possibly by an older Endpoint). "
+            f"Starting this version on port {port} instead."
+        )
     print(f"Endpoint {url}")
     print(f"Investigation data: {database_path}")
     print("Press Ctrl+C to stop.")
-    uvicorn.run("endpoint.main:app", host=args.host, port=args.port, log_level="info")
+    uvicorn.run("endpoint.main:app", host=args.host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

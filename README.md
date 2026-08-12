@@ -28,6 +28,13 @@ PostgreSQL, or a browser extension.
 3. Double-click `endpoint.exe`.
 4. Endpoint opens in your browser at `http://127.0.0.1:8765`.
 
+If an older Endpoint process is still using port 8765, the new version automatically chooses the
+next available local port and opens that address so the browser cannot silently remain on the old
+build.
+
+Endpoint does not cache its local interface between packaged versions. If the graph renderer fails,
+the application keeps the investigation visible and provides an explicit reload action.
+
 Windows SmartScreen may warn that the application is unrecognized because the open-source binary is
 not code-signed yet. Only run a binary downloaded from this repository's official Releases page.
 

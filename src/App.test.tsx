@@ -109,5 +109,6 @@ describe("Endpoint app", () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toMatchObject({
       signature_limit: 10,
     });
+    expect(screen.getByText("No supported transfers in this transaction slice")).toBeInTheDocument();
   });
 });

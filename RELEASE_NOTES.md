@@ -1,9 +1,25 @@
-# Endpoint v0.1.1
+# Endpoint v0.1.2
+
+This patch fixes an upgrade problem on desktop: if an older Endpoint process was already listening
+on port 8765, launching the new download could leave the browser connected to the old version.
+
+## Fixed in v0.1.2
+
+- Detect when the requested local port is already occupied.
+- Start the newly launched version on the next available local port instead of exiting at bind time.
+- Open the browser at the port belonging to the new process.
+- Print a clear stale-process/port warning in the launcher output.
+- Prevent the local browser from caching UI files across packaged versions.
+- Catch graph and application rendering failures and show a reload recovery screen instead of a
+  black page.
+- Show a high-contrast explanation when a transaction slice contains no supported transfers.
+
+## Also included from v0.1.1
 
 This patch turns the first packaged build's display-only surfaces into a usable investigation
 workflow and fixes the public Solana RPC failure that caused real traces to abort with HTTP 429.
 
-## Fixed
+### Fixed
 
 - Pace Solana JSON-RPC requests below the public endpoint's documented per-method limit.
 - Honor numeric `Retry-After` responses with bounded exponential retries.
@@ -12,7 +28,7 @@ workflow and fixes the public Solana RPC failure that caused real traces to abor
 - Use Solana's current documented public mainnet endpoint by default.
 - Return structured retryable API errors and offer a one-click 10-transaction retry.
 
-## Newly functional
+### Newly functional
 
 - **Wallets** lists every observed address and opens its evidence inspector.
 - **Relationships** lists confirmed and heuristic edges with evidence scores.
