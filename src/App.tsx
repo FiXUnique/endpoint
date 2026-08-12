@@ -1,16 +1,27 @@
-import { lazy, Suspense, useCallback, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 
-import { expandAddress, exportUrl, loadDemo, traceAddress } from "./api";
+import { ApiError, expandAddress, exportUrl, loadDemo, traceAddress } from "./api";
 import { Inspector } from "./components/Inspector";
+import {
+  InvestigationWorkspace,
+  type InvestigationSection,
+} from "./components/InvestigationWorkspace";
 import type { Investigation, Selection } from "./types";
-
-const GraphCanvas = lazy(async () => {
-  const module = await import("./components/GraphCanvas");
-  return { default: module.GraphCanvas };
-});
 
 function shortAddress(value: string): string {
   return `${value.slice(0, 6)}…${value.slice(-5)}`;
+}
+
+interface DisplayError {
+  message: string;
+  retryable: boolean;
+}
+
+function displayError(error: unknown, fallback: string): DisplayError {
+  return {
+    message: error instanceof Error ? error.message : fallback,
+    retryable: error instanceof ApiError && error.retryable,
+  };
 }
 
 export default function App() {
@@ -18,25 +29,31 @@ export default function App() {
   const [limit, setLimit] = useState(25);
   const [investigation, setInvestigation] = useState<Investigation | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
+  const [section, setSection] = useState<InvestigationSection>("fund-flow");
   const [loading, setLoading] = useState(false);
   const [expanding, setExpanding] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DisplayError | null>(null);
 
   const select = useCallback((next: Selection) => setSelection(next), []);
 
-  async function runTrace(event: FormEvent) {
-    event.preventDefault();
+  async function executeTrace(signatureLimit = limit) {
     if (!address.trim()) return;
     setLoading(true);
     setError(null);
     setSelection(null);
     try {
-      setInvestigation(await traceAddress(address.trim(), limit));
+      setInvestigation(await traceAddress(address.trim(), signatureLimit));
+      setSection("fund-flow");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Investigation failed");
+      setError(displayError(requestError, "Investigation failed"));
     } finally {
       setLoading(false);
     }
+  }
+
+  async function runTrace(event: FormEvent) {
+    event.preventDefault();
+    await executeTrace();
   }
 
   async function openDemo() {
@@ -45,8 +62,9 @@ export default function App() {
     setSelection(null);
     try {
       setInvestigation(await loadDemo());
+      setSection("fund-flow");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Demo failed to load");
+      setError(displayError(requestError, "Demo failed to load"));
     } finally {
       setLoading(false);
     }
@@ -64,7 +82,7 @@ export default function App() {
         value: updated.nodes.find((node) => node.address === addressToExpand) ?? updated.nodes[0],
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Expansion failed");
+      setError(displayError(requestError, "Expansion failed"));
     } finally {
       setExpanding(false);
     }
@@ -80,14 +98,18 @@ export default function App() {
         <form className="search-form" onSubmit={runTrace}>
           <span className="search-icon">⌕</span>
           <input
-            aria-label="Solana wallet address"
+            aria-label="Solana wallet or mint address"
             value={address}
             onChange={(event) => setAddress(event.target.value)}
-            placeholder="Search a Solana wallet address"
+            placeholder="Search a Solana wallet or mint address"
             minLength={32}
             maxLength={44}
           />
-          <select aria-label="Transaction limit" value={limit} onChange={(event) => setLimit(Number(event.target.value))}>
+          <select
+            aria-label="Transaction limit"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.target.value))}
+          >
             <option value={10}>10 txs</option>
             <option value={25}>25 txs</option>
             <option value={50}>50 txs</option>
@@ -99,7 +121,35 @@ export default function App() {
         <div className="network-state"><span /> Solana mainnet</div>
       </header>
 
-      {error && <div className="error-banner" role="alert"><strong>Analysis error</strong><span>{error}</span><button onClick={() => setError(null)}>×</button></div>}
+      {loading && (
+        <div className="progress-banner" role="status">
+          <span /> Fetching and parsing public Solana transactions. Rate-limit retries may take a moment.
+        </div>
+      )}
+      {error && (
+        <div className="error-banner" role="alert">
+          <strong>Analysis error</strong>
+          <span>{error.message}</span>
+          {error.retryable && address.trim() && (
+            <button
+              className="retry-button"
+              onClick={() => {
+                setLimit(10);
+                void executeTrace(10);
+              }}
+            >
+              Retry with 10 txs
+            </button>
+          )}
+          <button
+            className="dismiss-button"
+            aria-label="Dismiss error"
+            onClick={() => setError(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {!investigation ? (
         <main className="welcome">
@@ -140,11 +190,11 @@ export default function App() {
             </div>
             {investigation.limits.notice && <div className="limit-notice">{investigation.limits.notice}</div>}
             <nav className="case-nav" aria-label="Investigation sections">
-              <button className="active"><span>⌘</span> Fund flow <b>{investigation.edges.filter((edge) => edge.certainty === "confirmed_fact").length}</b></button>
-              <button><span>◫</span> Wallets <b>{investigation.nodes.length}</b></button>
-              <button><span>⌁</span> Relationships <b>{investigation.edges.filter((edge) => edge.certainty !== "confirmed_fact").length}</b></button>
-              <button><span>◷</span> Timeline <b>{investigation.evidence.length}</b></button>
-              <button><span>✓</span> Evidence <b>{investigation.evidence.length}</b></button>
+              <button className={section === "fund-flow" ? "active" : ""} onClick={() => setSection("fund-flow")}><span>⌘</span> Fund flow <b>{investigation.edges.filter((edge) => edge.certainty === "confirmed_fact").length}</b></button>
+              <button className={section === "wallets" ? "active" : ""} onClick={() => setSection("wallets")}><span>◫</span> Wallets <b>{investigation.nodes.length}</b></button>
+              <button className={section === "relationships" ? "active" : ""} onClick={() => setSection("relationships")}><span>⌁</span> Relationships <b>{investigation.edges.length}</b></button>
+              <button className={section === "timeline" ? "active" : ""} onClick={() => setSection("timeline")}><span>◷</span> Timeline <b>{investigation.evidence.length}</b></button>
+              <button className={section === "evidence" ? "active" : ""} onClick={() => setSection("evidence")}><span>✓</span> Evidence <b>{investigation.evidence.length}</b></button>
             </nav>
             <section className="candidate-section">
               <div className="section-title"><h3>Consolidation candidates</h3><span>{investigation.exit_candidates.length}</span></div>
@@ -159,15 +209,7 @@ export default function App() {
             </section>
             <a className="export-link" href={investigation.data_source === "live_rpc" ? exportUrl(investigation.investigation_id) : undefined} aria-disabled={investigation.data_source !== "live_rpc"}>↓ Export evidence snapshot</a>
           </aside>
-          <section className="workspace">
-            <div className="workspace-toolbar">
-              <div><span className="eyebrow">Fund-flow graph</span><strong>{investigation.nodes.length} nodes · {investigation.edges.length} relationships</strong></div>
-              <div className="toolbar-chips"><span>Max 1 hop</span><span>{investigation.limits.returned_signatures || "demo"} transactions</span></div>
-            </div>
-            <Suspense fallback={<div className="graph-loading">Preparing graph renderer…</div>}>
-              <GraphCanvas investigation={investigation} onSelect={select} />
-            </Suspense>
-          </section>
+          <InvestigationWorkspace investigation={investigation} section={section} onSelect={select} />
           <Inspector investigation={investigation} selection={selection} expanding={expanding} onExpand={expand} />
         </main>
       )}

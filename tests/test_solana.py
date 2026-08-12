@@ -1,3 +1,5 @@
+import httpx
+import pytest
 from endpoint.chains.solana import SolanaAdapter
 
 
@@ -87,3 +89,83 @@ def test_ignores_unparsed_and_zero_value_instructions():
         "meta": {},
     }
     assert SolanaAdapter.normalize_transaction("Signature", transaction) == []
+
+
+@pytest.mark.asyncio
+async def test_retries_http_429_and_honors_bounded_retry_path():
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return httpx.Response(429, headers={"Retry-After": "0"}, request=request)
+        return httpx.Response(
+            200,
+            json={"jsonrpc": "2.0", "id": 1, "result": []},
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        adapter = SolanaAdapter(
+            "https://api.mainnet.solana.com",
+            max_retries=1,
+            min_request_interval=0,
+            client=client,
+        )
+        result = await adapter._rpc("getSignaturesForAddress", ["address"])
+
+    assert result == []
+    assert calls == 2
+
+
+@pytest.mark.asyncio
+async def test_keeps_successful_transactions_when_one_rpc_item_fails(monkeypatch):
+    adapter = SolanaAdapter(
+        "https://api.mainnet.solana.com",
+        max_retries=0,
+        min_request_interval=0,
+    )
+    transaction = {
+        "slot": 42,
+        "transaction": {
+            "message": {
+                "accountKeys": [],
+                "instructions": [
+                    {
+                        "parsed": {
+                            "type": "transfer",
+                            "info": {
+                                "source": "WalletSource",
+                                "destination": "WalletTarget",
+                                "lamports": 1_000_000_000,
+                            },
+                        }
+                    }
+                ],
+            }
+        },
+        "meta": {},
+    }
+
+    async def rpc(method, params):
+        if method == "getSignaturesForAddress":
+            return [{"signature": "good"}, {"signature": "limited"}]
+        if params[0] == "good":
+            return transaction
+        from endpoint.chains.solana import SolanaRpcError
+
+        raise SolanaRpcError(
+            "rate limited", code="rpc_rate_limited", retryable=True
+        )
+
+    monkeypatch.setattr(adapter, "_rpc", rpc)
+    try:
+        result = await adapter.get_address_transfers("WalletSource", 2)
+    finally:
+        await adapter.close()
+
+    assert len(result.transfers) == 1
+    assert result.signatures_seen == 2
+    assert result.transactions_processed == 1
+    assert result.transactions_failed == 1

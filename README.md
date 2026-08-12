@@ -6,7 +6,7 @@ Endpoint helps an investigator follow public blockchain transfers from a startin
 
 > Where did the money move, which wallets appear connected, and what evidence supports that view?
 
-Paste a Solana wallet address. Endpoint retrieves recent real mainnet transactions, extracts supported
+Paste a Solana wallet or mint address. Endpoint retrieves recent real mainnet transactions, extracts supported
 SOL and SPL-token transfers, draws an interactive directed graph, and lets you expand any observed
 wallet. Every solid edge links back to a transaction signature, slot, timestamp, amount, and parsed
 instruction. Inferred relationships remain dashed, scored, and explained.
@@ -70,6 +70,8 @@ Endpoint turns the observable part of that flow into:
 4. **Consolidation candidates** - wallets receiving from multiple observed graph addresses, ranked
    for inspection.
 5. **Explicit limits** - a warning whenever an RPC transaction cap means the graph is incomplete.
+6. **Investigation workspaces** - functional wallet, relationship, timeline, and evidence views in
+   addition to the graph.
 
 Clicking a transfer shows the transaction evidence. Clicking a dashed relationship shows each signal,
 its exact contribution to the evidence score, and the evidence IDs used. Clicking a wallet shows its
@@ -79,15 +81,16 @@ observed incoming/outgoing activity and offers a bounded recursive expansion.
 
 | Capability | Status | Meaning |
 | --- | --- | --- |
-| Solana wallet input | Available | Trace a base58 wallet address |
-| Real mainnet RPC ingestion | Available | Uses the configured Solana JSON-RPC endpoint |
+| Solana wallet/mint input | Available | Trace a bounded address-referenced transaction slice |
+| Real mainnet RPC ingestion | Available | Paces calls, honors `Retry-After`, and preserves partial results |
 | SOL transfers | Available | Parses supported System Program transfers |
 | SPL-token transfers | Available | Parses supported SPL Token instructions and inner instructions |
 | Interactive graph | Available | Pan, zoom, select, and inspect nodes and edges |
 | Recursive wallet expansion | Available | Merge another bounded transaction slice into the case |
 | Common-funder/timing analysis | Available | Deterministic, evidence-linked heuristics |
 | Consolidation ranking | Available | Multi-source convergence inside the observed graph |
-| Saved cases and JSON export | Available | Local SQLite snapshots and portable evidence |
+| Local snapshots and JSON export | Available | Persists evidence in SQLite and exports portable JSON |
+| Saved-case browser | Planned | Saved snapshots are currently retrievable through the API |
 | Synthetic demonstration | Available | Clearly labelled fake data using production analysis code |
 | Token-mint rug reconstruction | Planned | Deployer, launch, LP, holder, and post-rug workflow |
 | Pump.fun/bundle detection | Planned | Protocol decoding and launch-window coordination signals |

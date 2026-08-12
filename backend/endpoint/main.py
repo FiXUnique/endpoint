@@ -18,7 +18,13 @@ from endpoint.models import ExpandRequest, HealthResponse, InvestigationGraph, T
 from endpoint.repository import InvestigationRepository
 from endpoint.service import InvestigationService
 
-adapter = SolanaAdapter(settings.solana_rpc_url, settings.rpc_timeout_seconds)
+adapter = SolanaAdapter(
+    settings.solana_rpc_url,
+    settings.rpc_timeout_seconds,
+    max_retries=settings.rpc_max_retries,
+    min_request_interval=settings.rpc_min_interval_seconds,
+    concurrency=settings.rpc_concurrency,
+)
 repository = InvestigationRepository(settings.database_path)
 service = InvestigationService(adapter, repository, settings.solana_rpc_url)
 
@@ -46,7 +52,10 @@ app.add_middleware(
 
 @app.exception_handler(SolanaRpcError)
 async def rpc_error_handler(_, exc: SolanaRpcError) -> JSONResponse:
-    return JSONResponse(status_code=502, content={"detail": str(exc)})
+    return JSONResponse(
+        status_code=503 if exc.retryable else 502,
+        content={"detail": str(exc), "code": exc.code, "retryable": exc.retryable},
+    )
 
 
 def get_service() -> InvestigationService:

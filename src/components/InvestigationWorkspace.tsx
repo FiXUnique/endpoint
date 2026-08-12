@@ -1,0 +1,178 @@
+import { lazy, Suspense } from "react";
+
+import type { Evidence, GraphEdge, Investigation, Selection } from "../types";
+
+const GraphCanvas = lazy(async () => {
+  const module = await import("./GraphCanvas");
+  return { default: module.GraphCanvas };
+});
+
+export type InvestigationSection =
+  | "fund-flow"
+  | "wallets"
+  | "relationships"
+  | "timeline"
+  | "evidence";
+
+interface InvestigationWorkspaceProps {
+  investigation: Investigation;
+  section: InvestigationSection;
+  onSelect: (selection: Selection) => void;
+}
+
+const SECTION_TITLES: Record<InvestigationSection, string> = {
+  "fund-flow": "Fund-flow graph",
+  wallets: "Observed wallets",
+  relationships: "Evidence-backed relationships",
+  timeline: "Transaction timeline",
+  evidence: "Evidence ledger",
+};
+
+function short(value: string): string {
+  return `${value.slice(0, 8)}…${value.slice(-6)}`;
+}
+
+function edgeForEvidence(investigation: Investigation, evidence: Evidence): GraphEdge | undefined {
+  return investigation.edges.find((edge) => edge.evidence_ids.includes(evidence.id));
+}
+
+function sectionCount(investigation: Investigation, section: InvestigationSection): string {
+  if (section === "fund-flow") {
+    return `${investigation.nodes.length} nodes · ${investigation.edges.length} relationships`;
+  }
+  if (section === "wallets") return `${investigation.nodes.length} observed addresses`;
+  if (section === "relationships") return `${investigation.edges.length} relationships`;
+  return `${investigation.evidence.length} evidence records`;
+}
+
+function WalletList({ investigation, onSelect }: Omit<InvestigationWorkspaceProps, "section">) {
+  return (
+    <div className="record-list" aria-label="Observed wallets">
+      {investigation.nodes.map((node) => (
+        <button
+          className="record-row wallet-record"
+          key={node.id}
+          onClick={() => onSelect({ kind: "node", value: node })}
+        >
+          <span className={`record-marker ${node.seed ? "seed" : "wallet"}`} />
+          <div>
+            <strong>{node.seed ? "Investigation seed" : node.label ?? "Observed address"}</strong>
+            <code title={node.address}>{short(node.address)}</code>
+          </div>
+          <span>{node.incoming_count} in</span>
+          <span>{node.outgoing_count} out</span>
+          <span>{node.observed_assets.length} assets</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RelationshipList({
+  investigation,
+  onSelect,
+}: Omit<InvestigationWorkspaceProps, "section">) {
+  return (
+    <div className="record-list" aria-label="Relationships">
+      {investigation.edges.map((edge) => (
+        <button
+          className="record-row relationship-record"
+          key={edge.id}
+          onClick={() => onSelect({ kind: "edge", value: edge })}
+        >
+          <span
+            className={`record-marker ${
+              edge.certainty === "confirmed_fact" ? "confirmed" : "heuristic"
+            }`}
+          />
+          <div>
+            <strong>{edge.relationship.replaceAll("_", " ")}</strong>
+            <code>{short(edge.source)} → {short(edge.target)}</code>
+          </div>
+          <span>{edge.label}</span>
+          <b>{Math.round(edge.evidence_score * 100)}/100</b>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EvidenceRows({
+  investigation,
+  onSelect,
+  timeline,
+}: Omit<InvestigationWorkspaceProps, "section"> & { timeline: boolean }) {
+  const evidence = [...investigation.evidence].sort((left, right) => {
+    if (left.timestamp && right.timestamp) {
+      return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime();
+    }
+    return right.slot - left.slot;
+  });
+  if (!evidence.length) {
+    return <div className="workspace-empty">No parsed transfer evidence was found in this slice.</div>;
+  }
+  return (
+    <div className="record-list" aria-label={timeline ? "Transaction timeline" : "Evidence ledger"}>
+      {evidence.map((item) => {
+        const edge = edgeForEvidence(investigation, item);
+        return (
+          <div className="record-row evidence-record" key={item.id}>
+            <span className="record-marker confirmed" />
+            <button onClick={() => edge && onSelect({ kind: "edge", value: edge })}>
+              <strong>{item.amount} {item.asset}</strong>
+              <code>{short(item.source)} → {short(item.target)}</code>
+            </button>
+            <span>{item.timestamp ? new Date(item.timestamp).toLocaleString() : `slot ${item.slot.toLocaleString()}`}</span>
+            <a
+              href={`https://explorer.solana.com/tx/${item.signature}`}
+              target="_blank"
+              rel="noreferrer"
+              title="Open transaction in Solana Explorer"
+            >
+              Verify ↗
+            </a>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function InvestigationWorkspace({
+  investigation,
+  section,
+  onSelect,
+}: InvestigationWorkspaceProps) {
+  return (
+    <section className="workspace">
+      <div className="workspace-toolbar">
+        <div>
+          <span className="eyebrow">{SECTION_TITLES[section]}</span>
+          <strong>{sectionCount(investigation, section)}</strong>
+        </div>
+        <div className="toolbar-chips">
+          <span>1 hop per expansion</span>
+          <span>{investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} inspected</span>
+          {!!investigation.limits.failed_transactions && (
+            <span className="warning-chip">{investigation.limits.failed_transactions} unavailable</span>
+          )}
+        </div>
+      </div>
+      {section === "fund-flow" && (
+        <Suspense fallback={<div className="graph-loading">Preparing graph renderer…</div>}>
+          <GraphCanvas investigation={investigation} onSelect={onSelect} />
+        </Suspense>
+      )}
+      {section === "wallets" && <WalletList investigation={investigation} onSelect={onSelect} />}
+      {section === "relationships" && (
+        <RelationshipList investigation={investigation} onSelect={onSelect} />
+      )}
+      {section === "timeline" && (
+        <EvidenceRows investigation={investigation} onSelect={onSelect} timeline />
+      )}
+      {section === "evidence" && (
+        <EvidenceRows investigation={investigation} onSelect={onSelect} timeline={false} />
+      )}
+    </section>
+  );
+}

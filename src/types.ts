@@ -75,6 +75,8 @@ export interface Investigation {
   limits: {
     requested_signatures: number;
     returned_signatures: number;
+    processed_transactions?: number;
+    failed_transactions?: number;
     truncated: boolean;
     notice: string | null;
   };
