@@ -4,7 +4,7 @@ import hashlib
 from datetime import UTC, datetime
 
 from endpoint.analysis import build_graph
-from endpoint.chains.base import ChainAdapter
+from endpoint.chains.base import ChainAdapter, TransferFetchResult
 from endpoint.demo import synthetic_demo_transfers
 from endpoint.models import InvestigationGraph, TraceLimits, Transfer
 from endpoint.repository import InvestigationRepository
@@ -24,8 +24,8 @@ class InvestigationService:
     async def trace(
         self, address: str, signature_limit: int, name: str | None
     ) -> InvestigationGraph:
-        transfers, returned = await self.adapter.get_address_transfers(address, signature_limit)
-        nodes, edges, evidence, candidates = build_graph(address, transfers, self.rpc_url)
+        result = await self.adapter.get_address_transfers(address, signature_limit)
+        nodes, edges, evidence, candidates = build_graph(address, result.transfers, self.rpc_url)
         now = datetime.now(UTC)
         investigation_id = "inv_" + hashlib.sha256(
             f"solana:{address}:{now.isoformat()}".encode()
@@ -42,13 +42,11 @@ class InvestigationService:
             exit_candidates=candidates,
             limits=TraceLimits(
                 requested_signatures=signature_limit,
-                returned_signatures=returned,
-                truncated=returned >= signature_limit,
-                notice=(
-                    "The RPC signature limit was reached; this investigation is incomplete."
-                    if returned >= signature_limit
-                    else None
-                ),
+                returned_signatures=result.signatures_seen,
+                processed_transactions=result.transactions_processed,
+                failed_transactions=result.transactions_failed,
+                truncated=result.signatures_seen >= signature_limit,
+                notice=self._notice(result, signature_limit),
             ),
         )
         self.repository.save(graph)
@@ -83,7 +81,7 @@ class InvestigationService:
             return None
         if existing.data_source != "live_rpc":
             raise ValueError("Synthetic demonstrations cannot be expanded with live RPC data")
-        new_transfers, returned = await self.adapter.get_address_transfers(address, signature_limit)
+        result = await self.adapter.get_address_transfers(address, signature_limit)
         old_transfers = [
             Transfer(
                 id=item.id,
@@ -100,7 +98,9 @@ class InvestigationService:
             )
             for item in existing.evidence
         ]
-        merged = {transfer.id: transfer for transfer in [*old_transfers, *new_transfers]}
+        merged = {
+            transfer.id: transfer for transfer in [*old_transfers, *result.transfers]
+        }
         nodes, edges, evidence, candidates = build_graph(
             existing.seed, list(merged.values()), self.rpc_url
         )
@@ -110,13 +110,51 @@ class InvestigationService:
         existing.exit_candidates = candidates
         existing.limits = TraceLimits(
             requested_signatures=existing.limits.requested_signatures + signature_limit,
-            returned_signatures=existing.limits.returned_signatures + returned,
-            truncated=existing.limits.truncated or returned >= signature_limit,
-            notice=(
-                "At least one RPC signature limit was reached; this investigation is incomplete."
-                if existing.limits.truncated or returned >= signature_limit
-                else None
+            returned_signatures=(
+                existing.limits.returned_signatures + result.signatures_seen
+            ),
+            processed_transactions=(
+                existing.limits.processed_transactions + result.transactions_processed
+            ),
+            failed_transactions=(
+                existing.limits.failed_transactions + result.transactions_failed
+            ),
+            truncated=existing.limits.truncated or result.signatures_seen >= signature_limit,
+            notice=self._notice(
+                TransferFetchResult(
+                    transfers=result.transfers,
+                    signatures_seen=existing.limits.returned_signatures
+                    + result.signatures_seen,
+                    transactions_processed=existing.limits.processed_transactions
+                    + result.transactions_processed,
+                    transactions_failed=existing.limits.failed_transactions
+                    + result.transactions_failed,
+                ),
+                existing.limits.requested_signatures + signature_limit,
+                prefix="Expanded investigation. ",
             ),
         )
         self.repository.save(existing)
         return existing
+
+    @staticmethod
+    def _notice(
+        result: TransferFetchResult, signature_limit: int, prefix: str = ""
+    ) -> str | None:
+        notices: list[str] = []
+        if result.signatures_seen >= signature_limit:
+            notices.append(
+                "The transaction limit was reached; older activity is not included."
+            )
+        if result.transactions_failed:
+            notices.append(
+                f"{result.transactions_failed} transaction"
+                f"{'s were' if result.transactions_failed != 1 else ' was'} unavailable from "
+                "the RPC after retries or history pruning; results are partial."
+            )
+        if result.transactions_processed and not result.transfers:
+            notices.append(
+                "Transactions were inspected, but no parsed SOL or SPL transfer instructions "
+                "were present in this slice."
+            )
+        return prefix + " ".join(notices) if notices else None

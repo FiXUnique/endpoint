@@ -88,6 +88,8 @@ class ExitCandidate(BaseModel):
 class TraceLimits(BaseModel):
     requested_signatures: int
     returned_signatures: int
+    processed_transactions: int = 0
+    failed_transactions: int = 0
     truncated: bool
     notice: str | None = None
 

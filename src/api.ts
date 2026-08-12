@@ -2,14 +2,34 @@ import type { Investigation } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "" : "http://localhost:8000");
 
+export class ApiError extends Error {
+  code: string | null;
+  retryable: boolean;
+
+  constructor(message: string, code: string | null = null, retryable = false) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => null)) as { detail?: string } | null;
-    throw new Error(payload?.detail ?? `Request failed (${response.status})`);
+    const payload = (await response.json().catch(() => null)) as {
+      detail?: string;
+      code?: string;
+      retryable?: boolean;
+    } | null;
+    throw new ApiError(
+      payload?.detail ?? `Request failed (${response.status})`,
+      payload?.code ?? null,
+      payload?.retryable ?? response.status >= 500,
+    );
   }
   return response.json() as Promise<T>;
 }

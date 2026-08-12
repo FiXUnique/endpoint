@@ -1,6 +1,24 @@
-# Endpoint v0.1.0
+# Endpoint v0.1.1
 
-Endpoint's first packaged release provides an evidence-first Solana wallet investigation workflow.
+This patch turns the first packaged build's display-only surfaces into a usable investigation
+workflow and fixes the public Solana RPC failure that caused real traces to abort with HTTP 429.
+
+## Fixed
+
+- Pace Solana JSON-RPC requests below the public endpoint's documented per-method limit.
+- Honor numeric `Retry-After` responses with bounded exponential retries.
+- Keep successful transaction evidence when individual transaction lookups remain unavailable.
+- Report transaction limits, unavailable history, and partial results directly in the case.
+- Use Solana's current documented public mainnet endpoint by default.
+- Return structured retryable API errors and offer a one-click 10-transaction retry.
+
+## Newly functional
+
+- **Wallets** lists every observed address and opens its evidence inspector.
+- **Relationships** lists confirmed and heuristic edges with evidence scores.
+- **Timeline** sorts parsed transfers chronologically.
+- **Evidence** provides the complete ledger with Solana Explorer verification links.
+- Live trace progress and the actual processed/unavailable transaction counts are visible.
 
 ## Download and run
 
@@ -9,11 +27,10 @@ Endpoint's first packaged release provides an evidence-first Solana wallet inves
 1. Download `endpoint-windows-x64.zip`.
 2. Extract the archive.
 3. Double-click `endpoint.exe`.
-4. Your browser opens to the local Endpoint application.
+4. Your browser opens to `http://127.0.0.1:8765`.
 
-Windows SmartScreen may show an “unrecognized app” warning because this open-source binary is not
-code-signed yet. Choose **More info → Run anyway** only if the download came from this repository's
-official GitHub Releases page.
+Windows SmartScreen may show an "unrecognized app" warning because this open-source binary is not
+code-signed. Only run a binary downloaded from this repository's official Releases page.
 
 ### Linux
 
@@ -21,25 +38,18 @@ official GitHub Releases page.
 2. Run `./endpoint` from the extracted folder.
 3. Open `http://127.0.0.1:8765` if the browser does not open automatically.
 
-No Python, Node.js, database server, or Docker installation is required for these packaged builds.
+No Python, Node.js, database server, or Docker installation is required.
 
-## Included workflow
+## RPC note
 
-- Trace a Solana wallet's recent real mainnet transactions.
-- Normalize observed SOL and SPL-token transfer instructions.
-- Explore transfers in an interactive fund-flow graph.
-- Expand downstream or upstream wallets with bounded RPC requests.
-- Inspect the exact signature, slot, time, value, and instruction behind a transfer.
-- Review clearly marked common-funder and timing heuristics.
-- Rank possible consolidation points without presenting them as proven exit wallets.
-- Save investigation snapshots locally and export evidence as JSON.
-- Open a synthetic example that is unmistakably labelled as non-chain data.
+Solana's public endpoint is explicitly rate-limited and not intended as production infrastructure.
+Endpoint now slows down and retries correctly, but large or repeated investigations should use a
+dedicated provider:
 
-## Data and network behavior
+```text
+endpoint.exe --rpc-url https://your-solana-rpc.example
+./endpoint --rpc-url https://your-solana-rpc.example
+```
 
-Endpoint listens only on `127.0.0.1:8765` by default. Investigation snapshots are stored in the
-current user's application-data directory. Live traces query the configured Solana JSON-RPC endpoint;
-public RPC endpoints may rate-limit larger investigations.
-
-This release does not identify people, prove wallet ownership, or determine guilt. Heuristic evidence
-scores are reproducible indices—not probabilities of common ownership.
+Endpoint does not identify people, prove wallet ownership, or determine guilt. Evidence scores are
+reproducible indices, not probabilities of common ownership.
