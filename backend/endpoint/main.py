@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import os
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from endpoint import __version__
 from endpoint.chains.solana import SolanaAdapter, SolanaRpcError
@@ -112,3 +116,19 @@ async def synthetic_demo(
     investigation_service: Annotated[InvestigationService, Depends(get_service)],
 ) -> InvestigationGraph:
     return investigation_service.demo()
+
+
+def _web_distribution() -> Path | None:
+    """Find the built UI in a checkout or a PyInstaller bundle."""
+    candidates = []
+    if configured := os.getenv("ENDPOINT_WEB_DIST"):
+        candidates.append(Path(configured))
+    if bundle_root := getattr(sys, "_MEIPASS", None):
+        candidates.append(Path(bundle_root) / "web")
+    candidates.append(Path(__file__).resolve().parents[2] / "dist")
+    return next((path for path in candidates if (path / "index.html").is_file()), None)
+
+
+if web_distribution := _web_distribution():
+    # Mounted last so API and OpenAPI routes retain priority.
+    app.mount("/", StaticFiles(directory=web_distribution, html=True), name="web")
