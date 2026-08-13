@@ -2,8 +2,9 @@
 
 ## Phase 0 — delivered vertical slice
 
-Live Solana wallet RPC, normalized parsed transfers, graph exploration, recursive bounded expansion,
-fact/heuristic separation, reproducible scoring, snapshots, evidence export, tests, and synthetic demo.
+Live Solana RPC plus keyless indexed EVM history across seven networks, normalized native/token
+transfers, graph exploration, recursive bounded expansion, fact/heuristic separation, reproducible
+scoring, snapshots, evidence export, tests, and synthetic demo.
 
 ## Phase 1 — trustworthy Solana depth
 
@@ -29,6 +30,6 @@ evaluation datasets, heuristic calibration, and alert-safe risk indicators.
 
 ## Phase 4 — chain and bridge expansion
 
-EVM adapter, bridge protocol parsers, candidate destination correlation, observable privacy-system
-boundaries, and live investigation subscriptions. Every correlation retains uncertainty and competing
-candidates.
+Bridge protocol parsers, candidate destination correlation, additional chain families, observable
+privacy-system boundaries, and live investigation subscriptions. Every cross-chain correlation
+retains uncertainty and competing candidates.

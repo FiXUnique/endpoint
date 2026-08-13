@@ -1,15 +1,16 @@
 # Endpoint
 
-**Open-source Solana fund-flow investigation with evidence you can inspect.**
+**Open-source Solana and EVM fund-flow investigation with evidence you can inspect.**
 
 Endpoint helps an investigator follow public blockchain transfers from a starting wallet and answer:
 
 > Where did the money move, which wallets appear connected, and what evidence supports that view?
 
-Paste a Solana wallet or mint address. Endpoint retrieves recent real mainnet transactions, extracts supported
-SOL and SPL-token transfers, draws an interactive directed graph, and lets you expand any observed
-wallet. Every solid edge links back to a transaction signature, slot, timestamp, amount, and parsed
-instruction. The result leads with the wallet where the meaningful observed trail most likely stops,
+Choose a network and paste a wallet address. Endpoint supports Solana, Ethereum, Base, BNB Smart
+Chain, Polygon, Arbitrum, Optimism, and Avalanche. It retrieves recent public mainnet transactions,
+extracts supported native and token transfers, draws an interactive directed graph, and lets you
+expand any observed wallet. Every solid edge links back to a transaction signature, block/slot,
+timestamp, amount, and parsed record. The result leads with the wallet where the meaningful observed trail most likely stops,
 the assets it received, and plain-English reasons for the ranking. Inferred relationships remain
 dashed, scored, and explained; probable dust stays available as evidence without dominating the view.
 
@@ -91,6 +92,8 @@ observed incoming/outgoing activity and offers a bounded recursive expansion.
 | Capability | Status | Meaning |
 | --- | --- | --- |
 | Solana wallet/mint input | Available | Trace a bounded address-referenced transaction slice |
+| EVM `0x` wallet input | Available | Ethereum, Base, BNB, Polygon, Arbitrum, Optimism, and Avalanche |
+| Keyless EVM history | Available | Native and ERC-20 transfers through Routescan's public indexed API |
 | Real mainnet RPC ingestion | Available | Paces calls, honors `Retry-After`, and preserves partial results |
 | SOL transfers | Available | Parses supported System Program transfers |
 | SPL-token transfers | Available | Parses supported SPL Token instructions and inner instructions |
@@ -194,6 +197,7 @@ endpoint
 | Endpoint | Purpose |
 | --- | --- |
 | `GET /health` | Service health and configuration status |
+| `GET /api/v1/networks` | List supported mainnet networks and address formats |
 | `POST /api/v1/investigations/trace` | Create and save a bounded live wallet trace |
 | `POST /api/v1/investigations/expand` | Expand a wallet in an existing live investigation |
 | `GET /api/v1/investigations` | List saved cases |
@@ -206,7 +210,7 @@ Example:
 ```bash
 curl -X POST http://localhost:8000/api/v1/investigations/trace \
   -H "Content-Type: application/json" \
-  -d '{"address":"YOUR_SOLANA_ADDRESS","signature_limit":25}'
+  -d '{"chain":"ethereum","address":"0xYOUR_EVM_ADDRESS","signature_limit":25}'
 ```
 
 ## Architecture
@@ -220,17 +224,21 @@ FastAPI application
     |-- chain-neutral investigation service
     |-- deterministic graph and confidence analysis
     |-- local snapshot repository
-    '-- Solana adapter
-          |-- JSON-RPC retrieval
-          '-- System/SPL instruction normalization
+    |-- Solana adapter
+    |     |-- JSON-RPC retrieval
+    |     '-- System/SPL instruction normalization
+    '-- EVM adapters
+          |-- keyless indexed history retrieval
+          '-- native/ERC-20 normalization
 ```
 
 The packaged executable embeds the production UI and FastAPI service in one local process. Endpoint
-listens on loopback by default; live traces make outbound requests only to the configured Solana RPC.
+listens on loopback by default; live traces make outbound requests only to the configured Solana RPC
+or the configured EVM indexer.
 
 Chain-neutral code owns transfers, evidence, cases, graph relationships, limits, and exports.
-Solana-specific code owns JSON-RPC semantics, base58 validation, instruction parsing, token metadata,
-and future protocol decoders.
+Chain adapters own address validation, provider semantics, and transfer normalization. EVM networks
+use the same `0x` address format, so the selected network is always shown and stored with the case.
 
 Read more:
 
@@ -248,6 +256,9 @@ Read more:
 - One expansion fetches a bounded recent signature slice. Endpoint does not yet index full chain
   history.
 - Public Solana RPC endpoints frequently rate-limit sustained investigations.
+- The same EVM address may have different activity on each network; Endpoint does not assume that
+  an Ethereum result also represents Base, BNB Smart Chain, or another EVM chain.
+- The keyless EVM indexer can rate-limit or omit a newly submitted transaction while it is indexing.
 - Token-account ownership depends on transaction token-balance metadata when present.
 - Scores are interpretable indices and have not yet been calibrated as probabilities.
 - SQLite is appropriate for a local single-user app, not a shared multi-user deployment.

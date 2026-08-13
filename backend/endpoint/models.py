@@ -1,10 +1,32 @@
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, model_validator
+
+SupportedChain = Literal[
+    "solana",
+    "ethereum",
+    "base",
+    "bnb",
+    "polygon",
+    "arbitrum",
+    "optimism",
+    "avalanche",
+]
+
+EVM_CHAINS = {
+    "ethereum",
+    "base",
+    "bnb",
+    "polygon",
+    "arbitrum",
+    "optimism",
+    "avalanche",
+}
 
 
 class Certainty(StrEnum):
@@ -109,9 +131,9 @@ class TraceLimits(BaseModel):
 class InvestigationGraph(BaseModel):
     investigation_id: str
     name: str
-    chain: str = "solana"
+    chain: SupportedChain = "solana"
     seed: str
-    data_source: Literal["live_rpc", "synthetic_demo"]
+    data_source: Literal["live_rpc", "live_indexer", "synthetic_demo"]
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     nodes: list[GraphNode]
     edges: list[GraphEdge]
@@ -122,17 +144,15 @@ class InvestigationGraph(BaseModel):
 
 
 class TraceRequest(BaseModel):
+    chain: SupportedChain = "solana"
     address: str = Field(min_length=32, max_length=44)
     signature_limit: int = Field(default=25, ge=1, le=100)
     name: str | None = Field(default=None, max_length=120)
 
-    @field_validator("address")
-    @classmethod
-    def address_is_base58(cls, value: str) -> str:
-        alphabet = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-        if any(character not in alphabet for character in value):
-            raise ValueError("address must be base58 encoded")
-        return value
+    @model_validator(mode="after")
+    def address_matches_chain(self) -> TraceRequest:
+        self.address = validate_chain_address(self.chain, self.address)
+        return self
 
 
 class ExpandRequest(BaseModel):
@@ -150,3 +170,19 @@ class HealthResponse(BaseModel):
 class RpcResponse(BaseModel):
     result: Any | None = None
     error: dict[str, Any] | None = None
+
+
+def validate_chain_address(chain: str, address: str) -> str:
+    value = address.strip()
+    if chain in EVM_CHAINS:
+        if not re.fullmatch(r"0x[a-fA-F0-9]{40}", value):
+            raise ValueError(
+                "EVM addresses must start with 0x followed by 40 hexadecimal characters"
+            )
+        return value.lower()
+    if not 32 <= len(value) <= 44:
+        raise ValueError("Solana addresses must be between 32 and 44 characters")
+    alphabet = set("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
+    if any(character not in alphabet for character in value):
+        raise ValueError("Solana addresses must be base58 encoded")
+    return value

@@ -7,9 +7,9 @@ with explicit boundaries rather than migration constraints.
 
 ## Realistic MVP
 
-The MVP is one complete workflow: a Solana wallet enters through the API, a bounded RPC slice is
-retrieved, supported transfer instructions are normalized, evidence is preserved, relationships are
-calculated deterministically, the graph is saved, and an investigator can inspect and expand it.
+The implemented workflow accepts a Solana or supported EVM wallet, retrieves a bounded public
+history slice, normalizes supported transfers, preserves evidence, calculates relationships
+deterministically, saves the graph, and lets an investigator inspect and expand it.
 
 A token-mint investigation is materially different: it requires mint/deployer resolution, protocol
 decoders, launch windows, holder snapshots, and balance-delta analysis. It belongs in the next phase
@@ -35,6 +35,14 @@ instead of being superficially routed through the wallet tracer.
 - inner instruction traversal
 - token account owner/mint resolution from token balances
 - future Token-2022, Pump.fun, DEX and launchpad parsers
+
+### EVM-specific
+
+- explicit network selection for identical `0x` address formats
+- keyless Routescan indexed-history retrieval
+- native-value and ERC-20 transfer normalization
+- chain-specific native symbols and explorer links
+- Ethereum, Base, BNB Smart Chain, Polygon, Arbitrum, Optimism, and Avalanche adapters
 
 ## Why this stack
 

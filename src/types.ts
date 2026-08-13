@@ -4,6 +4,16 @@ export type Certainty =
   | "heuristic_relationship"
   | "weak_correlation";
 
+export type SupportedChain =
+  | "solana"
+  | "ethereum"
+  | "base"
+  | "bnb"
+  | "polygon"
+  | "arbitrum"
+  | "optimism"
+  | "avalanche";
+
 export interface Signal {
   type: string;
   contribution: number;
@@ -78,7 +88,7 @@ export interface Investigation {
   name: string;
   chain: string;
   seed: string;
-  data_source: "live_rpc" | "synthetic_demo";
+  data_source: "live_rpc" | "live_indexer" | "synthetic_demo";
   created_at: string;
   nodes: GraphNode[];
   edges: GraphEdge[];

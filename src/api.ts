@@ -1,4 +1,4 @@
-import type { Investigation } from "./types";
+import type { Investigation, SupportedChain } from "./types";
 
 const API_URL = import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? "" : "http://localhost:8000");
 
@@ -34,10 +34,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function traceAddress(address: string, signatureLimit: number): Promise<Investigation> {
+export function traceAddress(
+  chain: SupportedChain,
+  address: string,
+  signatureLimit: number,
+): Promise<Investigation> {
   return request("/api/v1/investigations/trace", {
     method: "POST",
-    body: JSON.stringify({ address, signature_limit: signatureLimit }),
+    body: JSON.stringify({ chain, address, signature_limit: signatureLimit }),
   });
 }
 

@@ -6,35 +6,50 @@ from datetime import UTC, datetime
 from endpoint.analysis import build_graph
 from endpoint.chains.base import ChainAdapter, TransferFetchResult
 from endpoint.demo import synthetic_demo_transfers
-from endpoint.models import InvestigationGraph, TraceLimits, Transfer
+from endpoint.models import (
+    InvestigationGraph,
+    TraceLimits,
+    Transfer,
+    validate_chain_address,
+)
 from endpoint.repository import InvestigationRepository
 
 
 class InvestigationService:
     def __init__(
         self,
-        adapter: ChainAdapter,
+        adapters: dict[str, ChainAdapter],
         repository: InvestigationRepository,
-        rpc_url: str,
     ) -> None:
-        self.adapter = adapter
+        self.adapters = adapters
         self.repository = repository
-        self.rpc_url = rpc_url
 
     async def trace(
-        self, address: str, signature_limit: int, name: str | None
+        self,
+        chain: str,
+        address: str,
+        signature_limit: int,
+        name: str | None,
     ) -> InvestigationGraph:
-        result = await self.adapter.get_address_transfers(address, signature_limit)
-        nodes, edges, evidence, candidates = build_graph(address, result.transfers, self.rpc_url)
+        adapter = self.adapters[chain]
+        address = validate_chain_address(chain, address)
+        result = await adapter.get_address_transfers(address, signature_limit)
+        nodes, edges, evidence, candidates = build_graph(
+            address,
+            result.transfers,
+            adapter.source_url,
+            chain,
+        )
         now = datetime.now(UTC)
         investigation_id = "inv_" + hashlib.sha256(
-            f"solana:{address}:{now.isoformat()}".encode()
+            f"{chain}:{address}:{now.isoformat()}".encode()
         ).hexdigest()[:16]
         graph = InvestigationGraph(
             investigation_id=investigation_id,
-            name=name or f"Solana trace {address[:6]}…{address[-4:]}",
+            name=name or f"{adapter.display_name} trace {address[:6]}…{address[-4:]}",
+            chain=chain,
             seed=address,
-            data_source="live_rpc",
+            data_source="live_rpc" if chain == "solana" else "live_indexer",
             created_at=now,
             nodes=nodes,
             edges=edges,
@@ -46,7 +61,7 @@ class InvestigationService:
                 processed_transactions=result.transactions_processed,
                 failed_transactions=result.transactions_failed,
                 truncated=result.signatures_seen >= signature_limit,
-                notice=self._notice(result, signature_limit),
+                notice=self._notice(result, signature_limit, adapter.display_name),
             ),
         )
         self.repository.save(graph)
@@ -54,10 +69,13 @@ class InvestigationService:
 
     def demo(self) -> InvestigationGraph:
         seed, transfers = synthetic_demo_transfers()
-        nodes, edges, evidence, candidates = build_graph(seed, transfers)
-        graph = InvestigationGraph(
+        nodes, edges, evidence, candidates = build_graph(
+            seed, transfers, chain="solana"
+        )
+        return InvestigationGraph(
             investigation_id="demo_synthetic_rug_flow",
             name="Synthetic rug-flow demonstration",
+            chain="solana",
             seed=seed,
             data_source="synthetic_demo",
             nodes=nodes,
@@ -71,7 +89,6 @@ class InvestigationService:
                 notice="Synthetic fixture: addresses and signatures are not real on-chain data.",
             ),
         )
-        return graph
 
     async def expand(
         self, investigation_id: str, address: str, signature_limit: int
@@ -79,9 +96,11 @@ class InvestigationService:
         existing = self.repository.get(investigation_id)
         if existing is None:
             return None
-        if existing.data_source != "live_rpc":
-            raise ValueError("Synthetic demonstrations cannot be expanded with live RPC data")
-        result = await self.adapter.get_address_transfers(address, signature_limit)
+        if existing.data_source == "synthetic_demo":
+            raise ValueError("Synthetic demonstrations cannot be expanded with live data")
+        adapter = self.adapters[existing.chain]
+        address = validate_chain_address(existing.chain, address)
+        result = await adapter.get_address_transfers(address, signature_limit)
         old_transfers = [
             Transfer(
                 id=item.id,
@@ -92,8 +111,18 @@ class InvestigationService:
                 target=item.target,
                 asset=item.asset,
                 amount=item.amount,
-                decimals=9 if item.asset == "SOL" else 0,
-                kind="native_transfer" if item.asset == "SOL" else "token_transfer",
+                decimals=(
+                    9
+                    if item.asset == "SOL"
+                    else 18
+                    if item.asset == adapter.native_asset
+                    else 0
+                ),
+                kind=(
+                    "native_transfer"
+                    if item.asset == adapter.native_asset
+                    else "token_transfer"
+                ),
                 instruction_path=item.instruction_path,
             )
             for item in existing.evidence
@@ -102,7 +131,10 @@ class InvestigationService:
             transfer.id: transfer for transfer in [*old_transfers, *result.transfers]
         }
         nodes, edges, evidence, candidates = build_graph(
-            existing.seed, list(merged.values()), self.rpc_url
+            existing.seed,
+            list(merged.values()),
+            adapter.source_url,
+            existing.chain,
         )
         existing.nodes = nodes
         existing.edges = edges
@@ -123,14 +155,19 @@ class InvestigationService:
             notice=self._notice(
                 TransferFetchResult(
                     transfers=result.transfers,
-                    signatures_seen=existing.limits.returned_signatures
-                    + result.signatures_seen,
-                    transactions_processed=existing.limits.processed_transactions
-                    + result.transactions_processed,
-                    transactions_failed=existing.limits.failed_transactions
-                    + result.transactions_failed,
+                    signatures_seen=(
+                        existing.limits.returned_signatures + result.signatures_seen
+                    ),
+                    transactions_processed=(
+                        existing.limits.processed_transactions
+                        + result.transactions_processed
+                    ),
+                    transactions_failed=(
+                        existing.limits.failed_transactions + result.transactions_failed
+                    ),
                 ),
                 existing.limits.requested_signatures + signature_limit,
+                adapter.display_name,
                 prefix="Expanded investigation. ",
             ),
         )
@@ -139,7 +176,10 @@ class InvestigationService:
 
     @staticmethod
     def _notice(
-        result: TransferFetchResult, signature_limit: int, prefix: str = ""
+        result: TransferFetchResult,
+        signature_limit: int,
+        network_name: str,
+        prefix: str = "",
     ) -> str | None:
         notices: list[str] = []
         if result.signatures_seen >= signature_limit:
@@ -149,12 +189,17 @@ class InvestigationService:
         if result.transactions_failed:
             notices.append(
                 f"{result.transactions_failed} transaction"
-                f"{'s were' if result.transactions_failed != 1 else ' was'} unavailable from "
-                "the RPC after retries or history pruning; results are partial."
+                f"{'s were' if result.transactions_failed != 1 else ' was'} unavailable "
+                "after retries; results are partial."
             )
         if result.transactions_processed and not result.transfers:
             notices.append(
-                "Transactions were inspected, but no parsed SOL or SPL transfer instructions "
-                "were present in this slice."
+                f"Transactions were inspected on {network_name}, but no supported positive-value "
+                "native or token transfers were present in this slice."
+            )
+        if not result.signatures_seen:
+            notices.append(
+                f"No indexed transactions were found for this address on {network_name}. "
+                "EVM addresses can exist on multiple networks; select another network if needed."
             )
         return prefix + " ".join(notices) if notices else None

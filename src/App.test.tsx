@@ -114,7 +114,10 @@ describe("Endpoint app", () => {
       });
     vi.stubGlobal("fetch", fetchMock);
     render(<App />);
-    fireEvent.change(screen.getByLabelText("Solana wallet or mint address"), {
+    fireEvent.change(screen.getByLabelText("Blockchain network"), {
+      target: { value: "solana" },
+    });
+    fireEvent.change(screen.getByLabelText("Wallet address"), {
       target: { value: "Seed111111111111111111111111111111111111" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Trace funds" }));
@@ -123,8 +126,51 @@ describe("Endpoint app", () => {
     await screen.findByText("Live trace");
 
     expect(JSON.parse(fetchMock.mock.calls[1][1].body as string)).toMatchObject({
+      chain: "solana",
       signature_limit: 10,
     });
     expect(screen.getByText("No supported transfers in this transaction slice")).toBeInTheDocument();
+  });
+
+  it("accepts a 0x address and sends the selected EVM network", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        investigation_id: "evm-empty",
+        name: "Ethereum trace 0xec14…3577",
+        chain: "ethereum",
+        seed: "0xec149f3cdb488e4001fba55b9114f89139fd3577",
+        data_source: "live_indexer",
+        created_at: new Date().toISOString(),
+        nodes: [{
+          id: "0xec149f3cdb488e4001fba55b9114f89139fd3577",
+          address: "0xec149f3cdb488e4001fba55b9114f89139fd3577",
+          kind: "wallet", label: null, seed: true, incoming_count: 0,
+          outgoing_count: 0, observed_assets: [],
+        }],
+        edges: [], evidence: [], exit_candidates: [],
+        limits: {
+          requested_signatures: 25, returned_signatures: 0,
+          processed_transactions: 0, failed_transactions: 0, truncated: false,
+          notice: "No indexed transactions were found for this address on Ethereum.",
+        },
+        methodology_version: "0.2.0",
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText("Wallet address"), {
+      target: { value: "0xec149f3cdb488e4001fba55b9114f89139fd3577" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Trace funds" }));
+
+    await screen.findByText("No supported transfers in this transaction slice");
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
+      chain: "ethereum",
+      address: "0xec149f3cdb488e4001fba55b9114f89139fd3577",
+    });
+    expect(screen.getAllByText("Ethereum mainnet").length).toBeGreaterThan(0);
+    expect(screen.getByText(/No endpoint can be identified/)).toBeInTheDocument();
   });
 });

@@ -22,7 +22,7 @@ No class asserts real-world identity or guilt.
 ## Current relationship formula
 
 `possible_common_funding_cluster` is emitted when two recipients have a common observed funder.
-Probable native-SOL dust transfers at or below `0.00001 SOL` remain in the evidence ledger but do
+Probable native-asset dust transfers at or below `0.00001` units remain in the evidence ledger but do
 not create heuristic relationships:
 
 ```text
@@ -54,8 +54,12 @@ score = min(0.95,
 
 Per-asset prominence compares a candidate's received total with the largest received total for the
 same asset among reachable wallets. It does not compare unrelated token denominations or imply a
-fiat value. The `0.00001 SOL` dust rule affects ranking and graph clutter only; every transfer remains
+fiat value. The native-asset dust rule affects ranking and graph clutter only; every transfer remains
 exportable as evidence.
+
+EVM investigations are always scoped to one selected network. Endpoint does not merge the same
+hexadecimal address across chains or infer a bridge relationship merely because addresses, amounts,
+or timing resemble one another.
 
 An endpoint means only that the currently observed trail stops at that address. It does not establish
 that the wallet is an exchange, off-ramp, final destination, owner of another wallet, or participant

@@ -29,6 +29,8 @@ class SolanaRpcError(RuntimeError):
 
 class SolanaAdapter:
     chain = "solana"
+    display_name = "Solana"
+    native_asset = "SOL"
 
     def __init__(
         self,
@@ -41,6 +43,7 @@ class SolanaAdapter:
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.rpc_url = rpc_url
+        self.source_url = rpc_url
         self._client = client or httpx.AsyncClient(timeout=timeout)
         self._owns_client = client is None
         self._request_id = 0

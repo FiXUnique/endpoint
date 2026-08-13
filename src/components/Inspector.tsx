@@ -14,6 +14,7 @@ function short(value: string): string {
 function assetName(asset: string): string {
   if (asset === "SOL") return "SOL";
   if (asset === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") return "USDC";
+  if (asset.length <= 18) return asset;
   return `${asset.slice(0, 5)}...${asset.slice(-4)}`;
 }
 
@@ -26,7 +27,7 @@ function EvidenceList({ items }: { items: Evidence[] }) {
           <div className="evidence-topline">
             <span className="status-dot confirmed" />
             <strong>{item.amount} {item.asset}</strong>
-            <span>slot {item.slot.toLocaleString()}</span>
+            <span>{item.chain === "solana" ? "slot" : "block"} {item.slot.toLocaleString()}</span>
           </div>
           <code title={item.signature}>{short(item.signature)}</code>
           <time>{item.timestamp ? new Date(item.timestamp).toLocaleString() : "Timestamp unavailable"}</time>
@@ -84,7 +85,7 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
         )}
         <button
           className="secondary-button expand-button"
-          disabled={expanding || investigation.data_source !== "live_rpc"}
+          disabled={expanding || investigation.data_source === "synthetic_demo"}
           onClick={() => onExpand(node.address)}
         >
           {expanding ? "Expanding…" : "Expand wallet · 15 transactions"}

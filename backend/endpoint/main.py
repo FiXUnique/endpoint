@@ -12,33 +12,46 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from endpoint import __version__
+from endpoint.chains.evm import EVM_NETWORKS, EvmAdapter, EvmIndexerError
 from endpoint.chains.solana import SolanaAdapter, SolanaRpcError
 from endpoint.config import settings
 from endpoint.models import ExpandRequest, HealthResponse, InvestigationGraph, TraceRequest
 from endpoint.repository import InvestigationRepository
 from endpoint.service import InvestigationService
 
-adapter = SolanaAdapter(
+solana_adapter = SolanaAdapter(
     settings.solana_rpc_url,
     settings.rpc_timeout_seconds,
     max_retries=settings.rpc_max_retries,
     min_request_interval=settings.rpc_min_interval_seconds,
     concurrency=settings.rpc_concurrency,
 )
+evm_adapters = {
+    chain: EvmAdapter(
+        chain,
+        base_url=settings.evm_indexer_url,
+        api_key=settings.routescan_api_key,
+        timeout=settings.rpc_timeout_seconds,
+        max_retries=settings.rpc_max_retries,
+    )
+    for chain in EVM_NETWORKS
+}
+adapters = {"solana": solana_adapter, **evm_adapters}
 repository = InvestigationRepository(settings.database_path)
-service = InvestigationService(adapter, repository, settings.solana_rpc_url)
+service = InvestigationService(adapters, repository)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     yield
-    await adapter.close()
+    for adapter in adapters.values():
+        await adapter.close()
 
 
 app = FastAPI(
     title="Endpoint Forensics API",
     version=__version__,
-    description="Evidence-first Solana fund-flow investigation API",
+    description="Evidence-first Solana and EVM fund-flow investigation API",
     lifespan=lifespan,
 )
 app.add_middleware(
@@ -68,6 +81,14 @@ async def rpc_error_handler(_, exc: SolanaRpcError) -> JSONResponse:
     )
 
 
+@app.exception_handler(EvmIndexerError)
+async def evm_error_handler(_, exc: EvmIndexerError) -> JSONResponse:
+    return JSONResponse(
+        status_code=503 if exc.retryable else 502,
+        content={"detail": str(exc), "code": exc.code, "retryable": exc.retryable},
+    )
+
+
 def get_service() -> InvestigationService:
     return service
 
@@ -83,8 +104,19 @@ async def trace_investigation(
     investigation_service: Annotated[InvestigationService, Depends(get_service)],
 ) -> InvestigationGraph:
     return await investigation_service.trace(
-        request.address, request.signature_limit, request.name
+        request.chain, request.address, request.signature_limit, request.name
     )
+
+
+@app.get("/api/v1/networks", response_model=list[dict[str, str]])
+async def supported_networks() -> list[dict[str, str]]:
+    return [
+        {"id": "solana", "name": "Solana", "address_format": "base58"},
+        *[
+            {"id": chain, "name": config["name"], "address_format": "0x"}
+            for chain, config in EVM_NETWORKS.items()
+        ],
+    ]
 
 
 @app.get("/api/v1/investigations", response_model=list[dict[str, str]])
