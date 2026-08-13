@@ -1,6 +1,14 @@
-import { Component, lazy, Suspense, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  useMemo,
+  useState,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 
-import type { Evidence, GraphEdge, Investigation, Selection } from "../types";
+import type { ExitCandidate, GraphEdge, Investigation, Selection } from "../types";
 
 const GraphCanvas = lazy(async () => {
   const module = await import("./GraphCanvas");
@@ -57,16 +65,60 @@ function short(value: string): string {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }
 
-function edgeForEvidence(investigation: Investigation, evidence: Evidence): GraphEdge | undefined {
-  return investigation.edges.find((edge) => edge.evidence_ids.includes(evidence.id));
+function assetName(asset: string): string {
+  if (asset === "SOL") return "SOL";
+  if (asset === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") return "USDC";
+  if (asset === "So11111111111111111111111111111111111111112") return "wrapped SOL";
+  return `${asset.slice(0, 5)}...${asset.slice(-4)}`;
+}
+
+function EndpointAnswer({
+  investigation,
+  candidate,
+  onSelect,
+}: {
+  investigation: Investigation;
+  candidate: ExitCandidate;
+  onSelect: (selection: Selection) => void;
+}) {
+  const node = investigation.nodes.find((item) => item.address === candidate.address);
+  return (
+    <section className="endpoint-answer" aria-label="Likely endpoint">
+      <div className="endpoint-answer-heading">
+        <div>
+          <span className="eyebrow">Likely endpoint in this trace</span>
+          <h2>{short(candidate.address)}</h2>
+          <code title={candidate.address}>{candidate.address}</code>
+        </div>
+        <div className="endpoint-confidence">
+          <strong>{Math.round(candidate.evidence_score * 100)}</strong>
+          <span>evidence score</span>
+        </div>
+      </div>
+      <div className="endpoint-reasons">
+        <div><span>1</span><p><strong>Funds arrived here</strong>{candidate.received_assets.map((total) => `${total.amount} ${assetName(total.asset)}`).join(" + ")}</p></div>
+        <div><span>2</span><p><strong>The observed trail {candidate.terminal_in_observed_graph ? "stops here" : "continues"}</strong>{candidate.terminal_in_observed_graph ? "No meaningful outgoing transfer appears in this snapshot." : `${candidate.outgoing_transfer_count} meaningful outgoing transfer(s) appear in this snapshot.`}</p></div>
+        <div><span>3</span><p><strong>{candidate.hop_distance === 1 ? "Directly from the seed" : `${candidate.hop_distance ?? "?"} hops from the seed`}</strong>{candidate.incoming_transfer_count} meaningful incoming transfer{candidate.incoming_transfer_count === 1 ? "" : "s"}; dust is excluded from this ranking.</p></div>
+      </div>
+      <div className="endpoint-answer-footer">
+        <p>This is where the currently observed trail ends, not an identity or ownership claim.</p>
+        {node && <button onClick={() => onSelect({ kind: "node", value: node })}>Inspect and continue tracing</button>}
+      </div>
+    </section>
+  );
 }
 
 function sectionCount(investigation: Investigation, section: InvestigationSection): string {
+  const meaningfulEdges = investigation.edges.filter((edge) => !edge.probable_noise);
   if (section === "fund-flow") {
-    return `${investigation.nodes.length} nodes · ${investigation.edges.length} relationships`;
+    const visibleNodes = new Set([
+      investigation.seed,
+      ...meaningfulEdges.flatMap((edge) => [edge.source, edge.target]),
+    ]);
+    return `${visibleNodes.size} wallets · ${meaningfulEdges.length} meaningful relationships`;
   }
   if (section === "wallets") return `${investigation.nodes.length} observed addresses`;
-  if (section === "relationships") return `${investigation.edges.length} relationships`;
+  if (section === "relationships") return `${meaningfulEdges.length} meaningful relationships`;
   return `${investigation.evidence.length} evidence records`;
 }
 
@@ -99,7 +151,7 @@ function RelationshipList({
 }: Omit<InvestigationWorkspaceProps, "section">) {
   return (
     <div className="record-list" aria-label="Relationships">
-      {investigation.edges.map((edge) => (
+      {investigation.edges.filter((edge) => !edge.probable_noise).map((edge) => (
         <button
           className="record-row relationship-record"
           key={edge.id}
@@ -127,19 +179,44 @@ function EvidenceRows({
   onSelect,
   timeline,
 }: Omit<InvestigationWorkspaceProps, "section"> & { timeline: boolean }) {
+  const [showNoise, setShowNoise] = useState(false);
+  const edgeByEvidenceId = useMemo(() => {
+    const index = new Map<string, GraphEdge>();
+    for (const edge of investigation.edges) {
+      for (const evidenceId of edge.evidence_ids) index.set(evidenceId, edge);
+    }
+    return index;
+  }, [investigation.edges]);
   const evidence = [...investigation.evidence].sort((left, right) => {
     if (left.timestamp && right.timestamp) {
       return new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime();
     }
     return right.slot - left.slot;
   });
+  const noiseEvidence = evidence.filter(
+    (item) => edgeByEvidenceId.get(item.id)?.probable_noise,
+  );
+  const visibleEvidence = showNoise
+    ? evidence
+    : evidence.filter((item) => !edgeByEvidenceId.get(item.id)?.probable_noise);
   if (!evidence.length) {
     return <div className="workspace-empty">No parsed transfer evidence was found in this slice.</div>;
   }
   return (
     <div className="record-list" aria-label={timeline ? "Transaction timeline" : "Evidence ledger"}>
-      {evidence.map((item) => {
-        const edge = edgeForEvidence(investigation, item);
+      {!!noiseEvidence.length && (
+        <div className="noise-summary">
+          <div>
+            <strong>{noiseEvidence.length} probable dust transfer{noiseEvidence.length === 1 ? "" : "s"} hidden</strong>
+            <span>Still preserved in the evidence export.</span>
+          </div>
+          <button onClick={() => setShowNoise((current) => !current)}>
+            {showNoise ? "Hide dust" : "Show dust"}
+          </button>
+        </div>
+      )}
+      {visibleEvidence.map((item) => {
+        const edge = edgeByEvidenceId.get(item.id);
         return (
           <div className="record-row evidence-record" key={item.id}>
             <span className="record-marker confirmed" />
@@ -168,7 +245,9 @@ export function InvestigationWorkspace({
   section,
   onSelect,
 }: InvestigationWorkspaceProps) {
-  const hasRelationships = investigation.edges.length > 0;
+  const meaningfulEdges = investigation.edges.filter((edge) => !edge.probable_noise);
+  const hasRelationships = meaningfulEdges.length > 0;
+  const primaryEndpoint = investigation.exit_candidates[0];
   return (
     <section className="workspace">
       <div className="workspace-toolbar">
@@ -195,11 +274,20 @@ export function InvestigationWorkspace({
         </div>
       )}
       {section === "fund-flow" && hasRelationships && (
-        <GraphErrorBoundary>
-          <Suspense fallback={<div className="graph-loading">Preparing graph renderer…</div>}>
-            <GraphCanvas investigation={investigation} onSelect={onSelect} />
-          </Suspense>
-        </GraphErrorBoundary>
+        <>
+          {primaryEndpoint && (
+            <EndpointAnswer
+              investigation={investigation}
+              candidate={primaryEndpoint}
+              onSelect={onSelect}
+            />
+          )}
+          <GraphErrorBoundary>
+            <Suspense fallback={<div className="graph-loading">Preparing graph renderer...</div>}>
+              <GraphCanvas investigation={investigation} onSelect={onSelect} />
+            </Suspense>
+          </GraphErrorBoundary>
+        </>
       )}
       {section === "wallets" && <WalletList investigation={investigation} onSelect={onSelect} />}
       {section === "relationships" && (

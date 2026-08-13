@@ -7,6 +7,7 @@ from decimal import Decimal
 from itertools import combinations
 
 from endpoint.models import (
+    AssetTotal,
     Certainty,
     EvidenceRef,
     ExitCandidate,
@@ -15,6 +16,8 @@ from endpoint.models import (
     Signal,
     Transfer,
 )
+
+NATIVE_DUST_CUTOFF = Decimal("0.00001")
 
 
 def _short_hash(value: str) -> str:
@@ -33,6 +36,40 @@ def _seconds_between(left: datetime | None, right: datetime | None) -> float | N
     if left is None or right is None:
         return None
     return abs((left - right).total_seconds())
+
+
+def _is_probable_noise(transfer: Transfer) -> bool:
+    """Identify negligible native transfers commonly used for address poisoning.
+
+    The evidence remains visible and exportable. The flag only prevents tiny transfers
+    from dominating relationship and endpoint ranking.
+    """
+    return transfer.asset == "SOL" and Decimal(transfer.amount) <= NATIVE_DUST_CUTOFF
+
+
+def _asset_totals(transfers: list[Transfer]) -> list[AssetTotal]:
+    totals: defaultdict[str, Decimal] = defaultdict(Decimal)
+    for transfer in transfers:
+        totals[transfer.asset] += Decimal(transfer.amount)
+    return [
+        AssetTotal(asset=asset, amount=format(amount, "f"))
+        for asset, amount in sorted(totals.items())
+    ]
+
+
+def _hop_distances(seed: str, transfers: list[Transfer]) -> dict[str, int]:
+    destinations: defaultdict[str, set[str]] = defaultdict(set)
+    for transfer in transfers:
+        destinations[transfer.source].add(transfer.target)
+    distances = {seed: 0}
+    frontier = [seed]
+    while frontier:
+        source = frontier.pop(0)
+        for target in destinations[source]:
+            if target not in distances:
+                distances[target] = distances[source] + 1
+                frontier.append(target)
+    return distances
 
 
 def build_graph(
@@ -112,13 +149,15 @@ def build_graph(
                     )
                 ],
                 evidence_ids=ids,
+                probable_noise=all(_is_probable_noise(transfer) for transfer in group),
             )
         )
 
+    meaningful_transfers = [transfer for transfer in transfers if not _is_probable_noise(transfer)]
     by_funder: defaultdict[str, defaultdict[str, list[Transfer]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    for transfer in transfers:
+    for transfer in meaningful_transfers:
         by_funder[transfer.source][transfer.target].append(transfer)
 
     for funder, recipients in sorted(by_funder.items()):
@@ -174,31 +213,88 @@ def build_graph(
             )
 
     candidates: list[ExitCandidate] = []
-    incoming_sources: defaultdict[str, set[str]] = defaultdict(set)
-    incoming_evidence: defaultdict[str, list[str]] = defaultdict(list)
-    for transfer in transfers:
-        incoming_sources[transfer.target].add(transfer.source)
-        incoming_evidence[transfer.target].append(transfer.id)
-    maximum_sources = max((len(sources) for sources in incoming_sources.values()), default=1)
-    for target, sources in incoming_sources.items():
-        if len(sources) < 2 or target == seed:
+    distances = _hop_distances(seed, meaningful_transfers)
+    reachable = set(distances)
+    relevant = [
+        transfer
+        for transfer in meaningful_transfers
+        if transfer.source in reachable and transfer.target in reachable
+    ]
+    incoming_by_target: defaultdict[str, list[Transfer]] = defaultdict(list)
+    outgoing_by_source: defaultdict[str, list[Transfer]] = defaultdict(list)
+    maximum_received_by_asset: defaultdict[str, Decimal] = defaultdict(Decimal)
+    for transfer in relevant:
+        incoming_by_target[transfer.target].append(transfer)
+        outgoing_by_source[transfer.source].append(transfer)
+    for target, target_transfers in incoming_by_target.items():
+        if target == seed:
             continue
-        convergence = min(len(sources) / max(maximum_sources, 2), 1)
-        score = round(0.3 + 0.5 * convergence, 4)
+        for total in _asset_totals(target_transfers):
+            maximum_received_by_asset[total.asset] = max(
+                maximum_received_by_asset[total.asset], Decimal(total.amount)
+            )
+
+    for target, target_transfers in incoming_by_target.items():
+        if target == seed:
+            continue
+        sources = {transfer.source for transfer in target_transfers}
+        target_outgoing = outgoing_by_source[target]
+        received_assets = _asset_totals(target_transfers)
+        prominence = max(
+            (
+                Decimal(total.amount) / maximum_received_by_asset[total.asset]
+                for total in received_assets
+                if maximum_received_by_asset[total.asset]
+            ),
+            default=Decimal(0),
+        )
+        direct = any(transfer.source == seed for transfer in target_transfers)
+        terminal = not target_outgoing
+        repeat_signal = min(len(target_transfers) / 3, 1)
+        asset_signal = min(len(received_assets) / 2, 1)
+        score = (
+            (0.25 if terminal else 0)
+            + (0.2 if direct else 0)
+            + 0.2 * repeat_signal
+            + 0.25 * float(prominence)
+            + 0.1 * asset_signal
+        )
+        score = round(min(score, 0.95), 4)
+        asset_summary = ", ".join(
+            f"{total.amount} {total.asset}" for total in received_assets
+        )
+        terminal_summary = (
+            "No meaningful outgoing transfer was observed in this snapshot."
+            if terminal
+            else f"{len(target_outgoing)} meaningful outgoing transfer(s) were also observed."
+        )
         candidates.append(
             ExitCandidate(
                 address=target,
                 evidence_score=score,
-                label="potential consolidation point",
+                label="likely observed endpoint" if terminal else "fund-flow waypoint",
                 explanation=(
-                    f"Received observed transfers from {len(sources)} distinct graph addresses. "
-                    "This is a convergence heuristic, not an attribution or proof of off-ramping."
+                    f"Received {asset_summary} across "
+                    f"{len(target_transfers)} meaningful transfer(s). "
+                    f"{terminal_summary} This identifies where the observed trail stops, not who "
+                    "controls the wallet; it is not an attribution or proof of off-ramping."
                 ),
                 contributing_wallets=len(sources),
-                evidence_ids=sorted(set(incoming_evidence[target])),
+                evidence_ids=sorted({transfer.id for transfer in target_transfers}),
+                direct_from_seed=direct,
+                terminal_in_observed_graph=terminal,
+                hop_distance=distances[target],
+                incoming_transfer_count=len(target_transfers),
+                outgoing_transfer_count=len(target_outgoing),
+                received_assets=received_assets,
             )
         )
     candidates.sort(
-        key=lambda item: (-item.evidence_score, -item.contributing_wallets, item.address)
+        key=lambda item: (
+            not item.terminal_in_observed_graph,
+            -item.evidence_score,
+            item.hop_distance or 0,
+            item.address,
+        )
     )
     return nodes, edges, evidence, candidates

@@ -1,8 +1,8 @@
 # Evidence and confidence methodology
 
-Version: `0.1.0`
+Version: `0.2.0`
 
-Endpoint follows: **evidence → relationships → hypotheses → confidence → explanation**.
+Endpoint follows: **evidence -> relationships -> hypotheses -> confidence -> explanation**.
 
 ## Evidence records
 
@@ -21,12 +21,14 @@ No class asserts real-world identity or guilt.
 
 ## Current relationship formula
 
-`possible_common_funding_cluster` is emitted when two recipients have a common observed funder:
+`possible_common_funding_cluster` is emitted when two recipients have a common observed funder.
+Probable native-SOL dust transfers at or below `0.00001 SOL` remain in the evidence ledger but do
+not create heuristic relationships:
 
 ```text
 score = min(1,
   0.45                                             # common funder
-  + max(0, 0.20 × (1 - seconds_apart / 120))      # if <= 120 seconds
+  + max(0, 0.20 * (1 - seconds_apart / 120))       # if <= 120 seconds
 )
 ```
 
@@ -34,18 +36,30 @@ The score is deterministic and rounded to four decimals. A common service addres
 users, so the result remains a heuristic regardless of score. High-degree known services will be
 excluded or separately modelled once the provenance-aware entity registry exists.
 
-## Consolidation candidates
+## Observed endpoint candidates
 
-A target observed receiving from at least two distinct graph addresses becomes a *potential
-consolidation point*:
+Endpoint ranking follows meaningful directed transfers outward from the investigation seed. Every
+reachable recipient is scored, and terminal wallets (no meaningful outgoing transfer in the current
+snapshot) rank ahead of waypoints:
 
 ```text
-score = 0.30 + 0.50 × min(distinct_sources / max_observed_sources, 1)
+score = min(0.95,
+  0.25 if terminal in the observed graph
+  + 0.20 if directly funded by the seed
+  + 0.20 * min(meaningful_incoming_transfers / 3, 1)
+  + 0.25 * strongest per-asset received-value prominence
+  + 0.10 * min(distinct_received_assets / 2, 1)
+)
 ```
 
-This ranks convergence inside the bounded graph only. It does not establish that the target is an
-off-ramp, controls the source wallets, or belongs to a suspect. The UI uses “candidate” and displays
-the contributing evidence.
+Per-asset prominence compares a candidate's received total with the largest received total for the
+same asset among reachable wallets. It does not compare unrelated token denominations or imply a
+fiat value. The `0.00001 SOL` dust rule affects ranking and graph clutter only; every transfer remains
+exportable as evidence.
+
+An endpoint means only that the currently observed trail stops at that address. It does not establish
+that the wallet is an exchange, off-ramp, final destination, owner of another wallet, or participant
+in wrongdoing. Expanding the candidate can reveal later movement and change the ranking.
 
 ## Calibration plan
 

@@ -24,6 +24,12 @@ function displayError(error: unknown, fallback: string): DisplayError {
   };
 }
 
+function primaryEndpointSelection(investigation: Investigation): Selection {
+  const address = investigation.exit_candidates[0]?.address;
+  const node = investigation.nodes.find((item) => item.address === address);
+  return node ? { kind: "node", value: node } : null;
+}
+
 export default function App() {
   const [address, setAddress] = useState("");
   const [limit, setLimit] = useState(25);
@@ -42,7 +48,9 @@ export default function App() {
     setError(null);
     setSelection(null);
     try {
-      setInvestigation(await traceAddress(address.trim(), signatureLimit));
+      const result = await traceAddress(address.trim(), signatureLimit);
+      setInvestigation(result);
+      setSelection(primaryEndpointSelection(result));
       setSection("fund-flow");
     } catch (requestError) {
       setError(displayError(requestError, "Investigation failed"));
@@ -61,7 +69,9 @@ export default function App() {
     setError(null);
     setSelection(null);
     try {
-      setInvestigation(await loadDemo());
+      const result = await loadDemo();
+      setInvestigation(result);
+      setSelection(primaryEndpointSelection(result));
       setSection("fund-flow");
     } catch (requestError) {
       setError(displayError(requestError, "Demo failed to load"));
@@ -77,7 +87,7 @@ export default function App() {
     try {
       const updated = await expandAddress(investigation.investigation_id, addressToExpand);
       setInvestigation(updated);
-      setSelection({
+      setSelection(primaryEndpointSelection(updated) ?? {
         kind: "node",
         value: updated.nodes.find((node) => node.address === addressToExpand) ?? updated.nodes[0],
       });
@@ -190,22 +200,22 @@ export default function App() {
             </div>
             {investigation.limits.notice && <div className="limit-notice">{investigation.limits.notice}</div>}
             <nav className="case-nav" aria-label="Investigation sections">
-              <button className={section === "fund-flow" ? "active" : ""} onClick={() => setSection("fund-flow")}><span>⌘</span> Fund flow <b>{investigation.edges.filter((edge) => edge.certainty === "confirmed_fact").length}</b></button>
+              <button className={section === "fund-flow" ? "active" : ""} onClick={() => setSection("fund-flow")}><span>⌘</span> Fund flow <b>{investigation.edges.filter((edge) => edge.certainty === "confirmed_fact" && !edge.probable_noise).length}</b></button>
               <button className={section === "wallets" ? "active" : ""} onClick={() => setSection("wallets")}><span>◫</span> Wallets <b>{investigation.nodes.length}</b></button>
-              <button className={section === "relationships" ? "active" : ""} onClick={() => setSection("relationships")}><span>⌁</span> Relationships <b>{investigation.edges.length}</b></button>
+              <button className={section === "relationships" ? "active" : ""} onClick={() => setSection("relationships")}><span>⌁</span> Relationships <b>{investigation.edges.filter((edge) => !edge.probable_noise).length}</b></button>
               <button className={section === "timeline" ? "active" : ""} onClick={() => setSection("timeline")}><span>◷</span> Timeline <b>{investigation.evidence.length}</b></button>
               <button className={section === "evidence" ? "active" : ""} onClick={() => setSection("evidence")}><span>✓</span> Evidence <b>{investigation.evidence.length}</b></button>
             </nav>
             <section className="candidate-section">
-              <div className="section-title"><h3>Consolidation candidates</h3><span>{investigation.exit_candidates.length}</span></div>
+              <div className="section-title"><h3>Endpoint candidates</h3><span>{investigation.exit_candidates.length}</span></div>
               {investigation.exit_candidates.length ? investigation.exit_candidates.slice(0, 3).map((candidate, index) => (
                 <button className="candidate-row" key={candidate.address} onClick={() => {
                   const node = investigation.nodes.find((item) => item.address === candidate.address);
                   if (node) setSelection({ kind: "node", value: node });
                 }}>
-                  <b>0{index + 1}</b><div><code>{shortAddress(candidate.address)}</code><small>{candidate.contributing_wallets} converging wallets</small></div><strong>{Math.round(candidate.evidence_score * 100)}</strong>
+                  <b>0{index + 1}</b><div><code>{shortAddress(candidate.address)}</code><small>{candidate.terminal_in_observed_graph ? "Trail stops here" : "Funds move onward"} / {candidate.incoming_transfer_count} meaningful transfer{candidate.incoming_transfer_count === 1 ? "" : "s"}</small></div><strong>{Math.round(candidate.evidence_score * 100)}</strong>
                 </button>
-              )) : <p className="muted">No multi-source convergence observed in this slice.</p>}
+              )) : <p className="muted">No meaningful outgoing trail was found from the seed in this slice.</p>}
             </section>
             <a className="export-link" href={investigation.data_source === "live_rpc" ? exportUrl(investigation.investigation_id) : undefined} aria-disabled={investigation.data_source !== "live_rpc"}>↓ Export evidence snapshot</a>
           </aside>

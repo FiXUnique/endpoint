@@ -35,6 +35,12 @@ export interface GraphEdge {
   transfer_count: number;
   signals: Signal[];
   evidence_ids: string[];
+  probable_noise?: boolean;
+}
+
+export interface AssetTotal {
+  asset: string;
+  amount: string;
 }
 
 export interface Evidence {
@@ -59,6 +65,12 @@ export interface ExitCandidate {
   explanation: string;
   contributing_wallets: number;
   evidence_ids: string[];
+  direct_from_seed: boolean;
+  terminal_in_observed_graph: boolean;
+  hop_distance: number | null;
+  incoming_transfer_count: number;
+  outgoing_transfer_count: number;
+  received_assets: AssetTotal[];
 }
 
 export interface Investigation {

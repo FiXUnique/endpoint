@@ -74,6 +74,12 @@ class GraphEdge(BaseModel):
     transfer_count: int = 0
     signals: list[Signal] = Field(default_factory=list)
     evidence_ids: list[str] = Field(default_factory=list)
+    probable_noise: bool = False
+
+
+class AssetTotal(BaseModel):
+    asset: str
+    amount: str
 
 
 class ExitCandidate(BaseModel):
@@ -83,6 +89,12 @@ class ExitCandidate(BaseModel):
     explanation: str
     contributing_wallets: int
     evidence_ids: list[str]
+    direct_from_seed: bool = False
+    terminal_in_observed_graph: bool = False
+    hop_distance: int | None = None
+    incoming_transfer_count: int = 0
+    outgoing_transfer_count: int = 0
+    received_assets: list[AssetTotal] = Field(default_factory=list)
 
 
 class TraceLimits(BaseModel):
@@ -106,7 +118,7 @@ class InvestigationGraph(BaseModel):
     evidence: list[EvidenceRef]
     exit_candidates: list[ExitCandidate] = Field(default_factory=list)
     limits: TraceLimits
-    methodology_version: str = "0.1.0"
+    methodology_version: str = "0.2.0"
 
 
 class TraceRequest(BaseModel):

@@ -1,40 +1,34 @@
-# Endpoint v0.1.2
+# Endpoint v0.1.3
 
-This patch fixes an upgrade problem on desktop: if an older Endpoint process was already listening
-on port 8765, launching the new download could leave the browser connected to the old version.
+This release makes the result understandable without requiring users to interpret hundreds of raw
+wallet and relationship rows.
 
-## Fixed in v0.1.2
+## Clear endpoint answer
 
-- Detect when the requested local port is already occupied.
-- Start the newly launched version on the next available local port instead of exiting at bind time.
-- Open the browser at the port belonging to the new process.
-- Print a clear stale-process/port warning in the launcher output.
-- Prevent the local browser from caching UI files across packaged versions.
-- Catch graph and application rendering failures and show a reload recovery screen instead of a
-  black page.
-- Show a high-contrast explanation when a transaction slice contains no supported transfers.
+- Put one **Likely endpoint in this trace** answer above the graph.
+- Show the complete wallet address, received asset totals, hop distance, evidence score, and the
+  exact reasons it ranked first.
+- Automatically select the likely endpoint so its evidence and expansion action are immediately
+  visible.
+- Rename the confusing consolidation list to **Endpoint candidates** and state whether funds stop
+  or continue at each wallet.
 
-## Also included from v0.1.1
+## Dust-resistant analysis
 
-This patch turns the first packaged build's display-only surfaces into a usable investigation
-workflow and fixes the public Solana RPC failure that caused real traces to abort with HTTP 429.
+- Preserve tiny transfers in the evidence ledger and JSON export while excluding probable SOL dust
+  from endpoint ranking and common-funder relationships.
+- Follow meaningful transfers outward from the seed instead of ranking unrelated inbound activity.
+- Rank observed terminal wallets using transfer repetition, asset breadth, direct seed funding, and
+  per-asset value prominence.
+- Hide probable dust from the graph, relationship list, and timeline by default, with a **Show dust**
+  control for reviewers who need it.
+- Reduce a verified dust-poisoned trace from thousands of noisy combinations to a compact meaningful
+  graph and correctly rank its high-value terminal wallet first.
 
-### Fixed
+## Reliability retained
 
-- Pace Solana JSON-RPC requests below the public endpoint's documented per-method limit.
-- Honor numeric `Retry-After` responses with bounded exponential retries.
-- Keep successful transaction evidence when individual transaction lookups remain unavailable.
-- Report transaction limits, unavailable history, and partial results directly in the case.
-- Use Solana's current documented public mainnet endpoint by default.
-- Return structured retryable API errors and offer a one-click 10-transaction retry.
-
-### Newly functional
-
-- **Wallets** lists every observed address and opens its evidence inspector.
-- **Relationships** lists confirmed and heuristic edges with evidence scores.
-- **Timeline** sorts parsed transfers chronologically.
-- **Evidence** provides the complete ledger with Solana Explorer verification links.
-- Live trace progress and the actual processed/unavailable transaction counts are visible.
+- Includes the prior RPC retry/rate-limit handling, stale-port fallback, no-cache desktop UI,
+  rendering recovery screens, evidence export, and functional investigation views.
 
 ## Download and run
 

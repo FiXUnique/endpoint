@@ -9,10 +9,12 @@ Endpoint helps an investigator follow public blockchain transfers from a startin
 Paste a Solana wallet or mint address. Endpoint retrieves recent real mainnet transactions, extracts supported
 SOL and SPL-token transfers, draws an interactive directed graph, and lets you expand any observed
 wallet. Every solid edge links back to a transaction signature, slot, timestamp, amount, and parsed
-instruction. Inferred relationships remain dashed, scored, and explained.
+instruction. The result leads with the wallet where the meaningful observed trail most likely stops,
+the assets it received, and plain-English reasons for the ranking. Inferred relationships remain
+dashed, scored, and explained; probable dust stays available as evidence without dominating the view.
 
 Endpoint does **not** identify people, prove wallet ownership, decide that a crime occurred, or claim
-that a consolidation wallet is an exchange exit.
+that an observed endpoint is an exchange, off-ramp, or final destination.
 
 ## Download the app
 
@@ -74,8 +76,8 @@ Endpoint turns the observable part of that flow into:
    retrieval time.
 3. **Relationship hypotheses** - dashed edges for reproducible signals such as a common funder and
    close funding time.
-4. **Consolidation candidates** - wallets receiving from multiple observed graph addresses, ranked
-   for inspection.
+4. **Likely endpoint candidates** - meaningful paths followed outward from the seed and ranked by
+   where the observed trail stops, transfer repetition, asset breadth, and value prominence.
 5. **Explicit limits** - a warning whenever an RPC transaction cap means the graph is incomplete.
 6. **Investigation workspaces** - functional wallet, relationship, timeline, and evidence views in
    addition to the graph.
@@ -95,7 +97,7 @@ observed incoming/outgoing activity and offers a bounded recursive expansion.
 | Interactive graph | Available | Pan, zoom, select, and inspect nodes and edges |
 | Recursive wallet expansion | Available | Merge another bounded transaction slice into the case |
 | Common-funder/timing analysis | Available | Deterministic, evidence-linked heuristics |
-| Consolidation ranking | Available | Multi-source convergence inside the observed graph |
+| Endpoint ranking | Available | Dust-resistant ranking of meaningful terminal fund flows |
 | Local snapshots and JSON export | Available | Persists evidence in SQLite and exports portable JSON |
 | Saved-case browser | Planned | Saved snapshots are currently retrievable through the API |
 | Synthetic demonstration | Available | Clearly labelled fake data using production analysis code |
