@@ -1,3 +1,34 @@
+# Endpoint v0.2.0
+
+Endpoint now traces wallet activity across Solana and seven major EVM networks while keeping the
+answer focused on the wallet where the observed trail ends.
+
+## Multi-chain address scanning
+
+- Add Ethereum, Base, BNB Smart Chain, Polygon, Arbitrum, Optimism, and Avalanche C-Chain.
+- Add an explicit network selector so identical `0x` addresses are never silently mixed across
+  chains.
+- Retrieve native and ERC-20 transfer history through Routescan's keyless public indexed API.
+- Validate addresses according to the selected chain and link every evidence record to the correct
+  network explorer.
+- Preserve bounded expansion, evidence export, dust resistance, and endpoint ranking on EVM traces.
+- Replace deceptive Unicode token symbols with their contract address in the evidence view.
+
+## Clearer endpoint answer
+
+- Put a high-contrast **Endpoint wallet** verdict above the graph.
+- Show the full address and add a one-click copy action.
+- Explain in plain language that the result is the last observed recipient without later meaningful
+  outgoing activity in the scanned data.
+- For an empty slice, explicitly say that no endpoint can be identified and remind users to check
+  another EVM network.
+
+## Supported networks
+
+Solana, Ethereum, Base, BNB Smart Chain, Polygon, Arbitrum One, Optimism, and Avalanche C-Chain.
+
+---
+
 # Endpoint v0.1.3
 
 This release makes the result understandable without requiring users to interpret hundreds of raw

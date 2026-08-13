@@ -69,8 +69,20 @@ function assetName(asset: string): string {
   if (asset === "SOL") return "SOL";
   if (asset === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") return "USDC";
   if (asset === "So11111111111111111111111111111111111111112") return "wrapped SOL";
+  if (asset.length <= 18) return asset;
   return `${asset.slice(0, 5)}...${asset.slice(-4)}`;
 }
+
+const EXPLORERS: Record<string, string> = {
+  solana: "https://explorer.solana.com/tx/",
+  ethereum: "https://etherscan.io/tx/",
+  base: "https://basescan.org/tx/",
+  bnb: "https://bscscan.com/tx/",
+  polygon: "https://polygonscan.com/tx/",
+  arbitrum: "https://arbiscan.io/tx/",
+  optimism: "https://optimistic.etherscan.io/tx/",
+  avalanche: "https://snowtrace.io/tx/",
+};
 
 function EndpointAnswer({
   investigation,
@@ -82,12 +94,23 @@ function EndpointAnswer({
   onSelect: (selection: Selection) => void;
 }) {
   const node = investigation.nodes.find((item) => item.address === candidate.address);
+  const [copied, setCopied] = useState(false);
+
+  async function copyEndpoint() {
+    try {
+      await navigator.clipboard.writeText(candidate.address);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
   return (
     <section className="endpoint-answer" aria-label="Likely endpoint">
       <div className="endpoint-answer-heading">
         <div>
-          <span className="eyebrow">Likely endpoint in this trace</span>
-          <h2>{short(candidate.address)}</h2>
+          <span className="endpoint-verdict">Endpoint wallet</span>
+          <span className="eyebrow">Strongest place the scanned trail ends</span>
+          <h2>{candidate.address}</h2>
           <code title={candidate.address}>{candidate.address}</code>
         </div>
         <div className="endpoint-confidence">
@@ -101,8 +124,11 @@ function EndpointAnswer({
         <div><span>3</span><p><strong>{candidate.hop_distance === 1 ? "Directly from the seed" : `${candidate.hop_distance ?? "?"} hops from the seed`}</strong>{candidate.incoming_transfer_count} meaningful incoming transfer{candidate.incoming_transfer_count === 1 ? "" : "s"}; dust is excluded from this ranking.</p></div>
       </div>
       <div className="endpoint-answer-footer">
-        <p>This is where the currently observed trail ends, not an identity or ownership claim.</p>
-        {node && <button onClick={() => onSelect({ kind: "node", value: node })}>Inspect and continue tracing</button>}
+        <p>This is the last observed wallet receiving funds without a later meaningful outgoing transfer in the scanned data. It is not an identity claim.</p>
+        <div>
+          <button onClick={() => void copyEndpoint()}>{copied ? "Copied" : "Copy endpoint address"}</button>
+          {node && <button onClick={() => onSelect({ kind: "node", value: node })}>Inspect this wallet</button>}
+        </div>
       </div>
     </section>
   );
@@ -226,10 +252,10 @@ function EvidenceRows({
             </button>
             <span>{item.timestamp ? new Date(item.timestamp).toLocaleString() : `slot ${item.slot.toLocaleString()}`}</span>
             <a
-              href={`https://explorer.solana.com/tx/${item.signature}`}
+              href={`${EXPLORERS[investigation.chain] ?? EXPLORERS.ethereum}${item.signature}`}
               target="_blank"
               rel="noreferrer"
-              title="Open transaction in Solana Explorer"
+              title="Open transaction in the network explorer"
             >
               Verify ↗
             </a>
@@ -268,9 +294,9 @@ export function InvestigationWorkspace({
           <span className="result-glyph">0</span>
           <strong>No supported transfers in this transaction slice</strong>
           <p>
-            Endpoint reached Solana and inspected {investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions, but none contained parsed SOL or SPL-token transfers it can graph.
+            Endpoint scanned {investigation.chain} and inspected {investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions, but found no supported positive-value native or token transfers to graph.
           </p>
-          <p>Try a different wallet, raise the transaction limit, or inspect Wallets and Evidence.</p>
+          <p>No endpoint can be identified from this slice. For a 0x address, try the network selector because the same address can exist on several EVM chains.</p>
         </div>
       )}
       {section === "fund-flow" && hasRelationships && (

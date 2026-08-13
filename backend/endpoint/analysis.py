@@ -44,7 +44,10 @@ def _is_probable_noise(transfer: Transfer) -> bool:
     The evidence remains visible and exportable. The flag only prevents tiny transfers
     from dominating relationship and endpoint ranking.
     """
-    return transfer.asset == "SOL" and Decimal(transfer.amount) <= NATIVE_DUST_CUTOFF
+    return (
+        transfer.kind == "native_transfer"
+        and Decimal(transfer.amount) <= NATIVE_DUST_CUTOFF
+    )
 
 
 def _asset_totals(transfers: list[Transfer]) -> list[AssetTotal]:
@@ -73,7 +76,10 @@ def _hop_distances(seed: str, transfers: list[Transfer]) -> dict[str, int]:
 
 
 def build_graph(
-    seed: str, transfers: list[Transfer], rpc_url: str | None = None
+    seed: str,
+    transfers: list[Transfer],
+    rpc_url: str | None = None,
+    chain: str = "solana",
 ) -> tuple[list[GraphNode], list[GraphEdge], list[EvidenceRef], list[ExitCandidate]]:
     """Build a compact evidence graph without inventing relationships.
 
@@ -83,6 +89,7 @@ def build_graph(
     evidence = [
         EvidenceRef(
             id=transfer.id,
+            chain=chain,
             signature=transfer.signature,
             slot=transfer.slot,
             timestamp=transfer.timestamp,

@@ -20,6 +20,9 @@ class ChainAdapter(Protocol):
     """Chain-neutral boundary used by investigation services."""
 
     chain: str
+    display_name: str
+    native_asset: str
+    source_url: str
 
     async def get_address_transfers(
         self, address: str, signature_limit: int

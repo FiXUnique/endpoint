@@ -6,7 +6,22 @@ import {
   InvestigationWorkspace,
   type InvestigationSection,
 } from "./components/InvestigationWorkspace";
-import type { Investigation, Selection } from "./types";
+import type { Investigation, Selection, SupportedChain } from "./types";
+
+const NETWORKS: Array<{ id: SupportedChain; name: string; short: string }> = [
+  { id: "solana", name: "Solana", short: "SOL" },
+  { id: "ethereum", name: "Ethereum", short: "ETH" },
+  { id: "base", name: "Base", short: "BASE" },
+  { id: "bnb", name: "BNB Smart Chain", short: "BNB" },
+  { id: "polygon", name: "Polygon", short: "POL" },
+  { id: "arbitrum", name: "Arbitrum One", short: "ARB" },
+  { id: "optimism", name: "Optimism", short: "OP" },
+  { id: "avalanche", name: "Avalanche C-Chain", short: "AVAX" },
+];
+
+function networkName(chain: string): string {
+  return NETWORKS.find((item) => item.id === chain)?.name ?? chain;
+}
 
 function shortAddress(value: string): string {
   return `${value.slice(0, 6)}…${value.slice(-5)}`;
@@ -32,6 +47,7 @@ function primaryEndpointSelection(investigation: Investigation): Selection {
 
 export default function App() {
   const [address, setAddress] = useState("");
+  const [chain, setChain] = useState<SupportedChain>("ethereum");
   const [limit, setLimit] = useState(25);
   const [investigation, setInvestigation] = useState<Investigation | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
@@ -48,7 +64,7 @@ export default function App() {
     setError(null);
     setSelection(null);
     try {
-      const result = await traceAddress(address.trim(), signatureLimit);
+      const result = await traceAddress(chain, address.trim(), signatureLimit);
       setInvestigation(result);
       setSelection(primaryEndpointSelection(result));
       setSection("fund-flow");
@@ -106,12 +122,24 @@ export default function App() {
           <div><strong>endpoint</strong><small>ON-CHAIN FORENSICS</small></div>
         </div>
         <form className="search-form" onSubmit={runTrace}>
+          <label className="network-picker">
+            <span>Network</span>
+            <select
+              aria-label="Blockchain network"
+              value={chain}
+              onChange={(event) => setChain(event.target.value as SupportedChain)}
+            >
+              {NETWORKS.map((network) => (
+                <option key={network.id} value={network.id}>{network.name}</option>
+              ))}
+            </select>
+          </label>
           <span className="search-icon">⌕</span>
           <input
-            aria-label="Solana wallet or mint address"
+            aria-label="Wallet address"
             value={address}
             onChange={(event) => setAddress(event.target.value)}
-            placeholder="Search a Solana wallet or mint address"
+            placeholder={chain === "solana" ? "Paste a Solana wallet address" : "Paste a 0x wallet address"}
             minLength={32}
             maxLength={44}
           />
@@ -128,12 +156,12 @@ export default function App() {
             {loading ? "Analyzing…" : "Trace funds"}
           </button>
         </form>
-        <div className="network-state"><span /> Solana mainnet</div>
+        <div className="network-state"><span /> {networkName(chain)} mainnet</div>
       </header>
 
       {loading && (
         <div className="progress-banner" role="status">
-          <span /> Fetching and parsing public Solana transactions. Rate-limit retries may take a moment.
+          <span /> Scanning public {networkName(chain)} transfers and ranking where the observed trail ends.
         </div>
       )}
       {error && (
@@ -167,7 +195,7 @@ export default function App() {
           <section className="welcome-copy">
             <div className="kicker"><span /> EVIDENCE BEFORE INFERENCE</div>
             <h1>Follow the money.<br /><em>Question the conclusion.</em></h1>
-            <p>Trace public Solana transfers, inspect every relationship, and distinguish on-chain facts from reproducible heuristics.</p>
+            <p>Trace public Solana and EVM transfers, then see the strongest endpoint wallet without digging through a wall of addresses.</p>
             <div className="welcome-actions">
               <button className="primary-button large" onClick={() => document.querySelector<HTMLInputElement>(".search-form input")?.focus()}>Start with an address</button>
               <button className="secondary-button large" disabled={loading} onClick={openDemo}>Open synthetic demo</button>
@@ -196,7 +224,10 @@ export default function App() {
             </div>
             <div className={`source-banner ${investigation.data_source}`}>
               <span />
-              <div><strong>{investigation.data_source === "live_rpc" ? "Live RPC evidence" : "Synthetic fixture"}</strong><small>{investigation.data_source === "live_rpc" ? "Public Solana data" : "Not on-chain data"}</small></div>
+              <div>
+                <strong>{investigation.data_source === "synthetic_demo" ? "Synthetic fixture" : "Live on-chain evidence"}</strong>
+                <small>{investigation.data_source === "synthetic_demo" ? "Not on-chain data" : `${networkName(investigation.chain)} mainnet`}</small>
+              </div>
             </div>
             {investigation.limits.notice && <div className="limit-notice">{investigation.limits.notice}</div>}
             <nav className="case-nav" aria-label="Investigation sections">
@@ -217,7 +248,7 @@ export default function App() {
                 </button>
               )) : <p className="muted">No meaningful outgoing trail was found from the seed in this slice.</p>}
             </section>
-            <a className="export-link" href={investigation.data_source === "live_rpc" ? exportUrl(investigation.investigation_id) : undefined} aria-disabled={investigation.data_source !== "live_rpc"}>↓ Export evidence snapshot</a>
+            <a className="export-link" href={investigation.data_source !== "synthetic_demo" ? exportUrl(investigation.investigation_id) : undefined} aria-disabled={investigation.data_source === "synthetic_demo"}>↓ Export evidence snapshot</a>
           </aside>
           <InvestigationWorkspace investigation={investigation} section={section} onSelect={select} />
           <Inspector investigation={investigation} selection={selection} expanding={expanding} onExpand={expand} />

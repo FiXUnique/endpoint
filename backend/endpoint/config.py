@@ -16,6 +16,10 @@ class Settings:
     )
     rpc_concurrency: int = min(max(int(os.getenv("SOLANA_RPC_CONCURRENCY", "3")), 1), 8)
     max_signatures: int = min(int(os.getenv("SOLANA_MAX_SIGNATURES", "50")), 250)
+    evm_indexer_url: str = os.getenv(
+        "EVM_INDEXER_URL", "https://api.routescan.io/v2/network/mainnet/evm"
+    )
+    routescan_api_key: str | None = os.getenv("ROUTESCAN_API_KEY") or None
     database_path: str = os.getenv("DATABASE_PATH", ".data/endpoint.db")
     allowed_origins: tuple[str, ...] = tuple(
         origin.strip()
