@@ -60,7 +60,20 @@ describe("Endpoint app", () => {
           target: "Wallet1111111111111111111111111111111111", asset: "SOL", amount: "1",
           instruction_path: "outer:0", rpc_url: null, retrieved_at: new Date().toISOString(),
         }],
-        exit_candidates: [],
+        exit_candidates: [{
+          address: "Wallet1111111111111111111111111111111111",
+          evidence_score: 0.92,
+          label: "likely observed endpoint",
+          explanation: "The meaningful observed trail stops here.",
+          contributing_wallets: 1,
+          evidence_ids: ["ev-a"],
+          direct_from_seed: true,
+          terminal_in_observed_graph: true,
+          hop_distance: 1,
+          incoming_transfer_count: 1,
+          outgoing_transfer_count: 0,
+          received_assets: [{ asset: "SOL", amount: "1" }],
+        }],
         limits: { requested_signatures: 0, returned_signatures: 0, truncated: false, notice: "Synthetic fixture" },
         methodology_version: "0.1.0",
       }),
@@ -68,6 +81,9 @@ describe("Endpoint app", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /open synthetic demo/i }));
     await screen.findByLabelText("Interactive fund-flow graph");
+    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("Funds arrived here");
+    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("1 SOL");
+    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("The observed trail stops here");
 
     fireEvent.click(screen.getByRole("button", { name: /wallets 1/i }));
     expect(screen.getByLabelText("Observed wallets")).toBeInTheDocument();

@@ -19,18 +19,28 @@ export function GraphCanvas({ investigation, onSelect }: GraphCanvasProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const nodeMap = new Map(investigation.nodes.map((node) => [node.id, node]));
-    const edgeMap = new Map(investigation.edges.map((edge) => [edge.id, edge]));
-    const candidateAddresses = new Set(investigation.exit_candidates.map((item) => item.address));
+    const visibleEdges = investigation.edges.filter((edge) => !edge.probable_noise);
+    const visibleNodeIds = new Set([
+      investigation.seed,
+      ...visibleEdges.flatMap((edge) => [edge.source, edge.target]),
+    ]);
+    const visibleNodes = investigation.nodes.filter((node) => visibleNodeIds.has(node.id));
+    const nodeMap = new Map(visibleNodes.map((node) => [node.id, node]));
+    const edgeMap = new Map(visibleEdges.map((edge) => [edge.id, edge]));
+    const candidateAddresses = new Set(
+      investigation.exit_candidates
+        .filter((item) => item.terminal_in_observed_graph)
+        .map((item) => item.address),
+    );
     const elements: ElementDefinition[] = [
-      ...investigation.nodes.map((node) => ({
+      ...visibleNodes.map((node) => ({
         data: {
           id: node.id,
           label: node.label ?? shortened(node.address),
           nodeType: node.seed ? "seed" : candidateAddresses.has(node.address) ? "candidate" : "wallet",
         },
       })),
-      ...investigation.edges.map((edge) => ({
+      ...visibleEdges.map((edge) => ({
         data: {
           id: edge.id,
           source: edge.source,
@@ -160,7 +170,7 @@ export function GraphCanvas({ investigation, onSelect }: GraphCanvasProps) {
       <div className="graph-legend" aria-label="Graph legend">
         <span><i className="legend-dot seed" /> Seed</span>
         <span><i className="legend-dot wallet" /> Wallet</span>
-        <span><i className="legend-dot candidate" /> Consolidation candidate</span>
+        <span><i className="legend-dot candidate" /> Endpoint candidate</span>
         <span><i className="legend-line heuristic" /> Heuristic</span>
       </div>
       <div className="graph-canvas" ref={containerRef} aria-label="Interactive fund-flow graph" />

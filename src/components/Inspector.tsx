@@ -11,6 +11,12 @@ function short(value: string): string {
   return `${value.slice(0, 8)}…${value.slice(-6)}`;
 }
 
+function assetName(asset: string): string {
+  if (asset === "SOL") return "SOL";
+  if (asset === "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v") return "USDC";
+  return `${asset.slice(0, 5)}...${asset.slice(-4)}`;
+}
+
 function EvidenceList({ items }: { items: Evidence[] }) {
   if (!items.length) return <p className="muted">No evidence references attached.</p>;
   return (
@@ -65,9 +71,14 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
           <div><span>Assets</span><strong>{node.observed_assets.length}</strong></div>
         </div>
         {candidate && (
-          <div className="warning-card">
-            <span className="eyebrow">Potential consolidation</span>
+          <div className="endpoint-inspector-card">
+            <span className="eyebrow">
+              {candidate.terminal_in_observed_graph ? "Likely endpoint" : "Fund-flow waypoint"}
+            </span>
             <strong>{Math.round(candidate.evidence_score * 100)}/100 evidence score</strong>
+            <p className="endpoint-assets">
+              Received: {candidate.received_assets.map((total) => `${total.amount} ${assetName(total.asset)}`).join(" + ")}
+            </p>
             <p>{candidate.explanation}</p>
           </div>
         )}
