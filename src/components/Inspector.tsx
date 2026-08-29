@@ -42,8 +42,8 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
     return (
       <aside className="inspector empty-state">
         <div className="empty-glyph">⌖</div>
-        <h2>Inspect the evidence</h2>
-        <p>Select any node or relationship to see the exact transactions and reasoning behind it.</p>
+        <h2>Click a wallet to learn more</h2>
+        <p>Endpoint will show what came in, what went out, and the blockchain records behind it.</p>
       </aside>
     );
   }
@@ -58,25 +58,25 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
       <aside className="inspector">
         <div className="inspector-heading">
           <div>
-            <span className="eyebrow">Selected wallet</span>
-            <h2>{node.seed ? "Investigation seed" : "Observed address"}</h2>
+            <span className="eyebrow">Wallet details</span>
+            <h2>{node.seed ? "Starting wallet" : candidate?.terminal_in_observed_graph ? "Trail stopping point" : "Wallet found"}</h2>
           </div>
           <span className={`certainty-pill ${node.seed ? "confirmed" : "observed"}`}>
-            {node.seed ? "seed" : "observed"}
+            {node.seed ? "start" : "found"}
           </span>
         </div>
         <code className="address-block">{node.address}</code>
         <div className="metric-row">
-          <div><span>Incoming</span><strong>{node.incoming_count}</strong></div>
-          <div><span>Outgoing</span><strong>{node.outgoing_count}</strong></div>
-          <div><span>Assets</span><strong>{node.observed_assets.length}</strong></div>
+          <div><span>Money in</span><strong>{node.incoming_count}</strong></div>
+          <div><span>Money out</span><strong>{node.outgoing_count}</strong></div>
+          <div><span>Asset types</span><strong>{node.observed_assets.length}</strong></div>
         </div>
         {candidate && (
           <div className="endpoint-inspector-card">
             <span className="eyebrow">
-              {candidate.terminal_in_observed_graph ? "Likely endpoint" : "Fund-flow waypoint"}
+              {candidate.terminal_in_observed_graph ? "Money trail stops here" : "Money moved through here"}
             </span>
-            <strong>{Math.round(candidate.evidence_score * 100)}/100 evidence score</strong>
+            <strong>{Math.round(candidate.evidence_score * 100)}/100 clue strength</strong>
             <p className="endpoint-assets">
               Received: {candidate.received_assets.map((total) => `${total.amount} ${assetName(total.asset)}`).join(" + ")}
             </p>
@@ -88,13 +88,13 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
           disabled={expanding || investigation.data_source === "synthetic_demo"}
           onClick={() => onExpand(node.address)}
         >
-          {expanding ? "Expanding…" : "Expand wallet · 15 transactions"}
+          {expanding ? "Checking more…" : "Follow money from this wallet"}
         </button>
         {investigation.data_source === "synthetic_demo" && (
           <p className="field-note">Expansion is disabled for the synthetic demonstration.</p>
         )}
         <section className="inspector-section">
-          <div className="section-title"><h3>Referenced evidence</h3><span>{nodeEvidence.length}</span></div>
+          <div className="section-title"><h3>Blockchain records</h3><span>{nodeEvidence.length}</span></div>
           <EvidenceList items={nodeEvidence} />
         </section>
       </aside>
@@ -108,22 +108,22 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
     <aside className="inspector">
       <div className="inspector-heading">
         <div>
-          <span className="eyebrow">Selected relationship</span>
+          <span className="eyebrow">Possible wallet link</span>
           <h2>{edge.relationship.replaceAll("_", " ")}</h2>
         </div>
         <span className={`certainty-pill ${isFact ? "confirmed" : "heuristic"}`}>
-          {isFact ? "confirmed fact" : "heuristic"}
+          {isFact ? "real transfer" : "clue only"}
         </span>
       </div>
       <div className="score-panel">
         <div>
-          <span>Evidence score</span>
+          <span>Clue strength</span>
           <strong>{Math.round(edge.evidence_score * 100)}<small>/100</small></strong>
         </div>
-        <p>{isFact ? "Parsed directly from public on-chain transaction instructions." : "A reproducible heuristic score, not a probability of common ownership."}</p>
+        <p>{isFact ? "Read directly from a public blockchain transaction." : "This is a repeatable clue, not proof that the wallets have the same owner."}</p>
       </div>
       <section className="inspector-section">
-        <div className="section-title"><h3>Why this relationship appears</h3><span>{edge.signals.length}</span></div>
+        <div className="section-title"><h3>Why Endpoint shows this clue</h3><span>{edge.signals.length}</span></div>
         <div className="signal-list">
           {edge.signals.map((signal) => (
             <div className="signal" key={`${edge.id}-${signal.type}`}>
@@ -135,7 +135,7 @@ export function Inspector({ investigation, selection, expanding, onExpand }: Ins
         </div>
       </section>
       <section className="inspector-section">
-        <div className="section-title"><h3>Referenced evidence</h3><span>{edgeEvidence.length}</span></div>
+        <div className="section-title"><h3>Blockchain records</h3><span>{edgeEvidence.length}</span></div>
         <EvidenceList items={edgeEvidence} />
       </section>
     </aside>

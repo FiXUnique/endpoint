@@ -19,7 +19,9 @@ export function GraphCanvas({ investigation, onSelect }: GraphCanvasProps) {
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const visibleEdges = investigation.edges.filter((edge) => !edge.probable_noise);
+    const visibleEdges = investigation.edges.filter(
+      (edge) => edge.certainty === "confirmed_fact" && !edge.probable_noise,
+    );
     const visibleNodeIds = new Set([
       investigation.seed,
       ...visibleEdges.flatMap((edge) => [edge.source, edge.target]),
@@ -168,13 +170,12 @@ export function GraphCanvas({ investigation, onSelect }: GraphCanvasProps) {
   return (
     <div className="graph-wrap">
       <div className="graph-legend" aria-label="Graph legend">
-        <span><i className="legend-dot seed" /> Seed</span>
-        <span><i className="legend-dot wallet" /> Wallet</span>
-        <span><i className="legend-dot candidate" /> Endpoint candidate</span>
-        <span><i className="legend-line heuristic" /> Heuristic</span>
+        <span><i className="legend-dot seed" /> Starting wallet</span>
+        <span><i className="legend-dot wallet" /> Other wallet</span>
+        <span><i className="legend-dot candidate" /> Trail stops here</span>
       </div>
       <div className="graph-canvas" ref={containerRef} aria-label="Interactive fund-flow graph" />
-      <div className="graph-help">Scroll to zoom · Drag canvas to pan · Select a node or edge</div>
+      <div className="graph-help">Drag to move · Scroll to zoom · Click a wallet for details</div>
     </div>
   );
 }

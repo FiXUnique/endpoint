@@ -16,6 +16,7 @@ SupportedChain = Literal[
     "arbitrum",
     "optimism",
     "avalanche",
+    "robinhood",
 ]
 
 EVM_CHAINS = {
@@ -26,6 +27,7 @@ EVM_CHAINS = {
     "arbitrum",
     "optimism",
     "avalanche",
+    "robinhood",
 }
 
 
@@ -140,7 +142,7 @@ class InvestigationGraph(BaseModel):
     evidence: list[EvidenceRef]
     exit_candidates: list[ExitCandidate] = Field(default_factory=list)
     limits: TraceLimits
-    methodology_version: str = "0.2.0"
+    methodology_version: str = "0.3.0"
 
 
 class TraceRequest(BaseModel):

@@ -14,6 +14,9 @@ def test_trace_request_accepts_evm_and_still_rejects_wrong_format():
     with pytest.raises(ValidationError, match="EVM addresses must start with 0x"):
         TraceRequest(chain="ethereum", address="Seed111111111111111111111111111111111111")
 
+    hood_request = TraceRequest(chain="robinhood", address=ADDRESS.upper().replace("0X", "0x"))
+    assert hood_request.address == ADDRESS
+
 
 def test_normalizes_native_and_erc20_transfers():
     adapter = EvmAdapter("ethereum")
@@ -143,3 +146,125 @@ async def test_empty_evm_address_is_a_valid_empty_result():
 
     assert result.transfers == []
     assert result.signatures_seen == 0
+
+
+@pytest.mark.asyncio
+async def test_robinhood_blockscout_history_normalizes_nested_addresses():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/transactions"):
+            return httpx.Response(
+                200,
+                json={
+                    "items": [
+                        {
+                            "hash": "0xhood",
+                            "timestamp": "2026-08-29T08:19:07Z",
+                            "block_number": 4663,
+                            "from": {"hash": ADDRESS},
+                            "to": {"hash": "0x1111111111111111111111111111111111111111"},
+                            "value": "500000000000000000",
+                            "status": "ok",
+                        }
+                    ],
+                    "next_page_params": None,
+                },
+                request=request,
+            )
+        return httpx.Response(
+            200,
+            json={
+                "items": [
+                    {
+                        "transaction_hash": "0xtoken",
+                        "timestamp": "2026-08-29T08:20:07Z",
+                        "block_number": 4664,
+                        "log_index": 9,
+                        "from": {"hash": "0x1111111111111111111111111111111111111111"},
+                        "to": {"hash": ADDRESS},
+                        "total": {"value": "2500000", "decimals": 6},
+                        "token": {
+                            "address_hash": "0x2222222222222222222222222222222222222222",
+                            "symbol": "USDC",
+                            "decimals": 6,
+                        },
+                    }
+                ],
+                "next_page_params": None,
+            },
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await EvmAdapter("robinhood", client=client).get_address_transfers(ADDRESS, 10)
+
+    assert result.signatures_seen == 2
+    assert {(transfer.asset, transfer.amount) for transfer in result.transfers} == {
+        ("ETH", "0.5"),
+        ("USDC", "2.5"),
+    }
+
+
+@pytest.mark.asyncio
+async def test_bnb_uses_keyless_index_and_pairs_sender_with_receiver():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "/address/" in request.url.path:
+            return httpx.Response(
+                200,
+                json={
+                    "data": {
+                        "events": {
+                            "bnb-main": [
+                                {
+                                    "transaction": "0xbnb",
+                                    "time": "2026-08-29T08:19:07Z",
+                                }
+                            ]
+                        }
+                    }
+                },
+                request=request,
+            )
+        return httpx.Response(
+            200,
+            json={
+                "data": {
+                    "transaction": {
+                        "block": 118734321,
+                        "transaction": "0xbnb",
+                        "time": "2026-08-29T08:19:07Z",
+                    },
+                    "events": {
+                        "bnb-main": [
+                            {
+                                "sort_key": 1,
+                                "address": ADDRESS,
+                                "currency": "bnb",
+                                "effect": "-5000000000000000000",
+                                "failed": False,
+                                "extra": None,
+                            },
+                            {
+                                "sort_key": 2,
+                                "address": "0x1111111111111111111111111111111111111111",
+                                "currency": "bnb",
+                                "effect": "+5000000000000000000",
+                                "failed": False,
+                                "extra": None,
+                            },
+                        ]
+                    },
+                },
+                "library": {"currencies": {"bnb": {"symbol": "BNB", "decimals": 18}}},
+            },
+            request=request,
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await EvmAdapter("bnb", client=client).get_address_transfers(ADDRESS, 10)
+
+    assert result.signatures_seen == 1
+    assert result.transactions_failed == 0
+    assert len(result.transfers) == 1
+    assert result.transfers[0].source == ADDRESS
+    assert result.transfers[0].amount == "5"
+    assert result.transfers[0].asset == "BNB"

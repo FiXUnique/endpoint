@@ -12,7 +12,8 @@ export type SupportedChain =
   | "polygon"
   | "arbitrum"
   | "optimism"
-  | "avalanche";
+  | "avalanche"
+  | "robinhood";
 
 export interface Signal {
   type: string;
