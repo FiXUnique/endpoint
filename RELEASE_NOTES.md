@@ -1,3 +1,30 @@
+# Endpoint v0.3.0
+
+This release makes Endpoint understandable without blockchain vocabulary and adds verified support
+for Robinhood Chain while repairing BNB tracing that previously appeared in the menu but failed at
+the data provider.
+
+## A clear answer first
+
+- Rename the main sections to **Answer**, **Wallets found**, **Transactions**, **Possible links**,
+  and **Raw proof**.
+- Define an endpoint directly in the interface as “where the money trail stopped.”
+- Show a three-step summary: starting wallet → real transfers → stopping wallet.
+- Label the result **Best answer**, keep its full address visible, and provide copy and explorer
+  actions.
+- Rename evidence scores to **clue strength** and state that the number is not certainty.
+- Keep possible wallet links off the default money map so large investigations remain readable.
+
+## Robinhood Chain and BNB
+
+- Add Robinhood Chain mainnet (chain ID 4663) using its public Blockscout index for native ETH and
+  token transfers.
+- Replace the broken Routescan path for BNB Smart Chain with 3xpl's public BNB index.
+- Verify actual indexed histories for both networks and add provider-shaped regression tests.
+- BNB tracing currently follows native BNB movements; BEP-20 indexing remains a documented limit.
+
+---
+
 # Endpoint v0.2.0
 
 Endpoint now traces wallet activity across Solana and seven major EVM networks while keeping the

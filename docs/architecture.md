@@ -42,7 +42,7 @@ instead of being superficially routed through the wallet tracer.
 - keyless Routescan indexed-history retrieval
 - native-value and ERC-20 transfer normalization
 - chain-specific native symbols and explorer links
-- Ethereum, Base, BNB Smart Chain, Polygon, Arbitrum, Optimism, and Avalanche adapters
+- Ethereum, Base, BNB Smart Chain, Polygon, Arbitrum, Optimism, Avalanche, and Robinhood Chain adapters
 
 ## Why this stack
 

@@ -54,11 +54,11 @@ interface InvestigationWorkspaceProps {
 }
 
 const SECTION_TITLES: Record<InvestigationSection, string> = {
-  "fund-flow": "Fund-flow graph",
-  wallets: "Observed wallets",
-  relationships: "Evidence-backed relationships",
-  timeline: "Transaction timeline",
-  evidence: "Evidence ledger",
+  "fund-flow": "Your answer",
+  wallets: "Wallets Endpoint found",
+  relationships: "Possible links — clues, not proof",
+  timeline: "Money movements",
+  evidence: "Raw blockchain proof",
 };
 
 function short(value: string): string {
@@ -82,6 +82,19 @@ const EXPLORERS: Record<string, string> = {
   arbitrum: "https://arbiscan.io/tx/",
   optimism: "https://optimistic.etherscan.io/tx/",
   avalanche: "https://snowtrace.io/tx/",
+  robinhood: "https://robinhoodchain.blockscout.com/tx/",
+};
+
+const ADDRESS_EXPLORERS: Record<string, string> = {
+  solana: "https://explorer.solana.com/address/",
+  ethereum: "https://etherscan.io/address/",
+  base: "https://basescan.org/address/",
+  bnb: "https://bscscan.com/address/",
+  polygon: "https://polygonscan.com/address/",
+  arbitrum: "https://arbiscan.io/address/",
+  optimism: "https://optimistic.etherscan.io/address/",
+  avalanche: "https://snowtrace.io/address/",
+  robinhood: "https://robinhoodchain.blockscout.com/address/",
 };
 
 function EndpointAnswer({
@@ -95,6 +108,9 @@ function EndpointAnswer({
 }) {
   const node = investigation.nodes.find((item) => item.address === candidate.address);
   const [copied, setCopied] = useState(false);
+  const confirmedTransfers = investigation.edges.filter(
+    (edge) => edge.certainty === "confirmed_fact" && !edge.probable_noise,
+  ).length;
 
   async function copyEndpoint() {
     try {
@@ -108,26 +124,34 @@ function EndpointAnswer({
     <section className="endpoint-answer" aria-label="Likely endpoint">
       <div className="endpoint-answer-heading">
         <div>
-          <span className="endpoint-verdict">Endpoint wallet</span>
-          <span className="eyebrow">Strongest place the scanned trail ends</span>
-          <h2>{candidate.address}</h2>
+          <span className="endpoint-verdict">Best answer</span>
+          <span className="eyebrow">Endpoint means “where the money trail stopped”</span>
+          <h2>The money trail stops at this wallet</h2>
           <code title={candidate.address}>{candidate.address}</code>
         </div>
         <div className="endpoint-confidence">
           <strong>{Math.round(candidate.evidence_score * 100)}</strong>
-          <span>evidence score</span>
+          <span>clue strength / 100</span>
         </div>
       </div>
+      <div className="trail-steps" aria-label="Simple money trail">
+        <div><span>1</span><small>Started at</small><code>{short(investigation.seed)}</code></div>
+        <i>→</i>
+        <div><span>2</span><small>Endpoint followed</small><strong>{confirmedTransfers} real transfer{confirmedTransfers === 1 ? "" : "s"}</strong></div>
+        <i>→</i>
+        <div className="trail-stop"><span>3</span><small>Stopped at</small><code>{short(candidate.address)}</code></div>
+      </div>
       <div className="endpoint-reasons">
-        <div><span>1</span><p><strong>Funds arrived here</strong>{candidate.received_assets.map((total) => `${total.amount} ${assetName(total.asset)}`).join(" + ")}</p></div>
-        <div><span>2</span><p><strong>The observed trail {candidate.terminal_in_observed_graph ? "stops here" : "continues"}</strong>{candidate.terminal_in_observed_graph ? "No meaningful outgoing transfer appears in this snapshot." : `${candidate.outgoing_transfer_count} meaningful outgoing transfer(s) appear in this snapshot.`}</p></div>
-        <div><span>3</span><p><strong>{candidate.hop_distance === 1 ? "Directly from the seed" : `${candidate.hop_distance ?? "?"} hops from the seed`}</strong>{candidate.incoming_transfer_count} meaningful incoming transfer{candidate.incoming_transfer_count === 1 ? "" : "s"}; dust is excluded from this ranking.</p></div>
+        <div><span>✓</span><p><strong>Money arrived</strong>{candidate.received_assets.map((total) => `${total.amount} ${assetName(total.asset)}`).join(" + ")}</p></div>
+        <div><span>✓</span><p><strong>{candidate.terminal_in_observed_graph ? "No money moved onward" : "Some money moved onward"}</strong>{candidate.terminal_in_observed_graph ? "No meaningful outgoing transfer was found in this scan." : `${candidate.outgoing_transfer_count} outgoing transfer(s) were found.`}</p></div>
+        <div><span>✓</span><p><strong>{candidate.hop_distance === 1 ? "One step from the start" : `${candidate.hop_distance ?? "?"} steps from the start`}</strong>Tiny spam and dust transfers are ignored.</p></div>
       </div>
       <div className="endpoint-answer-footer">
-        <p>This is the last observed wallet receiving funds without a later meaningful outgoing transfer in the scanned data. It is not an identity claim.</p>
+        <p>Clue strength is not certainty, and this result does not identify who owns the wallet.</p>
         <div>
-          <button onClick={() => void copyEndpoint()}>{copied ? "Copied" : "Copy endpoint address"}</button>
-          {node && <button onClick={() => onSelect({ kind: "node", value: node })}>Inspect this wallet</button>}
+          <button onClick={() => void copyEndpoint()}>{copied ? "Copied" : "Copy wallet"}</button>
+          <a href={`${ADDRESS_EXPLORERS[investigation.chain] ?? ADDRESS_EXPLORERS.ethereum}${candidate.address}`} target="_blank" rel="noreferrer">Open in explorer ↗</a>
+          {node && <button onClick={() => onSelect({ kind: "node", value: node })}>See wallet details</button>}
         </div>
       </div>
     </section>
@@ -137,20 +161,21 @@ function EndpointAnswer({
 function sectionCount(investigation: Investigation, section: InvestigationSection): string {
   const meaningfulEdges = investigation.edges.filter((edge) => !edge.probable_noise);
   if (section === "fund-flow") {
+    const confirmedEdges = meaningfulEdges.filter((edge) => edge.certainty === "confirmed_fact");
     const visibleNodes = new Set([
       investigation.seed,
-      ...meaningfulEdges.flatMap((edge) => [edge.source, edge.target]),
+      ...confirmedEdges.flatMap((edge) => [edge.source, edge.target]),
     ]);
-    return `${visibleNodes.size} wallets · ${meaningfulEdges.length} meaningful relationships`;
+    return `${visibleNodes.size} wallets · ${confirmedEdges.length} real transfers`;
   }
   if (section === "wallets") return `${investigation.nodes.length} observed addresses`;
-  if (section === "relationships") return `${meaningfulEdges.length} meaningful relationships`;
-  return `${investigation.evidence.length} evidence records`;
+  if (section === "relationships") return `${meaningfulEdges.filter((edge) => edge.certainty !== "confirmed_fact").length} possible links`;
+  return `${investigation.evidence.length} blockchain records`;
 }
 
 function WalletList({ investigation, onSelect }: Omit<InvestigationWorkspaceProps, "section">) {
   return (
-    <div className="record-list" aria-label="Observed wallets">
+    <div className="record-list" aria-label="Wallets found">
       {investigation.nodes.map((node) => (
         <button
           className="record-row wallet-record"
@@ -159,7 +184,7 @@ function WalletList({ investigation, onSelect }: Omit<InvestigationWorkspaceProp
         >
           <span className={`record-marker ${node.seed ? "seed" : "wallet"}`} />
           <div>
-            <strong>{node.seed ? "Investigation seed" : node.label ?? "Observed address"}</strong>
+            <strong>{node.seed ? "Starting wallet" : node.label ?? "Wallet found"}</strong>
             <code title={node.address}>{short(node.address)}</code>
           </div>
           <span>{node.incoming_count} in</span>
@@ -175,9 +200,15 @@ function RelationshipList({
   investigation,
   onSelect,
 }: Omit<InvestigationWorkspaceProps, "section">) {
+  const possibleLinks = investigation.edges.filter(
+    (edge) => edge.certainty !== "confirmed_fact" && !edge.probable_noise,
+  );
+  if (!possibleLinks.length) {
+    return <div className="workspace-empty">No extra wallet links were suggested. Real transfers are shown under Answer and Transactions.</div>;
+  }
   return (
-    <div className="record-list" aria-label="Relationships">
-      {investigation.edges.filter((edge) => !edge.probable_noise).map((edge) => (
+    <div className="record-list" aria-label="Possible links">
+      {possibleLinks.map((edge) => (
         <button
           className="record-row relationship-record"
           key={edge.id}
@@ -189,11 +220,11 @@ function RelationshipList({
             }`}
           />
           <div>
-            <strong>{edge.relationship.replaceAll("_", " ")}</strong>
+            <strong>Possible link: {edge.relationship.replaceAll("_", " ")}</strong>
             <code>{short(edge.source)} → {short(edge.target)}</code>
           </div>
           <span>{edge.label}</span>
-          <b>{Math.round(edge.evidence_score * 100)}/100</b>
+          <b title="Clue strength, not certainty">{Math.round(edge.evidence_score * 100)}/100</b>
         </button>
       ))}
     </div>
@@ -229,7 +260,7 @@ function EvidenceRows({
     return <div className="workspace-empty">No parsed transfer evidence was found in this slice.</div>;
   }
   return (
-    <div className="record-list" aria-label={timeline ? "Transaction timeline" : "Evidence ledger"}>
+    <div className="record-list" aria-label={timeline ? "Transactions" : "Raw proof"}>
       {!!noiseEvidence.length && (
         <div className="noise-summary">
           <div>
@@ -272,7 +303,7 @@ export function InvestigationWorkspace({
   onSelect,
 }: InvestigationWorkspaceProps) {
   const meaningfulEdges = investigation.edges.filter((edge) => !edge.probable_noise);
-  const hasRelationships = meaningfulEdges.length > 0;
+  const hasTransfers = meaningfulEdges.some((edge) => edge.certainty === "confirmed_fact");
   const primaryEndpoint = investigation.exit_candidates[0];
   return (
     <section className="workspace">
@@ -282,24 +313,24 @@ export function InvestigationWorkspace({
           <strong>{sectionCount(investigation, section)}</strong>
         </div>
         <div className="toolbar-chips">
-          <span>1 hop per expansion</span>
-          <span>{investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} inspected</span>
+          <span>One wallet step at a time</span>
+          <span>{investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions checked</span>
           {!!investigation.limits.failed_transactions && (
             <span className="warning-chip">{investigation.limits.failed_transactions} unavailable</span>
           )}
         </div>
       </div>
-      {section === "fund-flow" && !hasRelationships && (
+      {section === "fund-flow" && !hasTransfers && (
         <div className="workspace-result-message" role="status">
           <span className="result-glyph">0</span>
-          <strong>No supported transfers in this transaction slice</strong>
+          <strong>No money trail was found in this scan</strong>
           <p>
-            Endpoint scanned {investigation.chain} and inspected {investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions, but found no supported positive-value native or token transfers to graph.
+            Endpoint checked {investigation.limits.processed_transactions ?? investigation.limits.returned_signatures} transactions on {investigation.chain}, but found no supported money transfers to follow.
           </p>
-          <p>No endpoint can be identified from this slice. For a 0x address, try the network selector because the same address can exist on several EVM chains.</p>
+          <p>There is no stopping wallet to show yet. If this is a 0x address, try another network—the same wallet address can exist on several chains.</p>
         </div>
       )}
-      {section === "fund-flow" && hasRelationships && (
+      {section === "fund-flow" && hasTransfers && (
         <>
           {primaryEndpoint && (
             <EndpointAnswer
@@ -308,6 +339,7 @@ export function InvestigationWorkspace({
               onSelect={onSelect}
             />
           )}
+          <div className="map-intro"><strong>Money map</strong><span>Only real transfers are drawn here. Possible links stay in their own section so this map remains readable.</span></div>
           <GraphErrorBoundary>
             <Suspense fallback={<div className="graph-loading">Preparing graph renderer...</div>}>
               <GraphCanvas investigation={investigation} onSelect={onSelect} />

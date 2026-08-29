@@ -2,17 +2,16 @@
 
 **Open-source Solana and EVM fund-flow investigation with evidence you can inspect.**
 
-Endpoint helps an investigator follow public blockchain transfers from a starting wallet and answer:
+Endpoint helps anyone follow public blockchain transfers from a starting wallet and answer:
 
-> Where did the money move, which wallets appear connected, and what evidence supports that view?
+> Where did the money go, and which wallet is the last stop Endpoint can see?
 
 Choose a network and paste a wallet address. Endpoint supports Solana, Ethereum, Base, BNB Smart
-Chain, Polygon, Arbitrum, Optimism, and Avalanche. It retrieves recent public mainnet transactions,
-extracts supported native and token transfers, draws an interactive directed graph, and lets you
-expand any observed wallet. Every solid edge links back to a transaction signature, block/slot,
-timestamp, amount, and parsed record. The result leads with the wallet where the meaningful observed trail most likely stops,
-the assets it received, and plain-English reasons for the ranking. Inferred relationships remain
-dashed, scored, and explained; probable dust stays available as evidence without dominating the view.
+Chain, Polygon, Arbitrum, Optimism, Avalanche, and Robinhood Chain. It retrieves recent public
+mainnet transactions, follows supported transfers, and puts one plain-English answer above the map:
+**the wallet where the scanned money trail appears to stop**. The starting wallet and stopping
+wallet are labelled directly, tiny spam transfers stay out of the way, and every claim links back to
+a public blockchain record.
 
 Endpoint does **not** identify people, prove wallet ownership, decide that a crime occurred, or claim
 that an observed endpoint is an exchange, off-ramp, or final destination.
@@ -59,6 +58,18 @@ endpoint.exe --rpc-url https://your-solana-rpc.example
 ./endpoint --rpc-url https://your-solana-rpc.example
 ```
 
+## What “endpoint” means
+
+An endpoint is not a special type of wallet. It is Endpoint's name for the last wallet in the
+scanned trail that received a meaningful amount and did not send a meaningful amount onward.
+
+```text
+Starting wallet  →  money moves through wallets  →  stopping wallet (the endpoint)
+```
+
+It is a lead, not proof of identity or guilt. The **clue strength** number explains how strongly the
+observed facts support the result; it is not a percentage chance that the answer is correct.
+
 ## What an investigation does
 
 Suppose funds leave one wallet, split across three wallets, and later converge:
@@ -70,21 +81,16 @@ Seed wallet
     '-- 15.5 SOL --> Wallet C --/
 ```
 
-Endpoint turns the observable part of that flow into:
+Endpoint turns the observable part of that flow into five simple views:
 
-1. **Confirmed transfer facts** - solid arrows parsed from public transaction instructions.
-2. **Evidence records** - signature, slot, timestamp, addresses, asset, amount, RPC source, and
-   retrieval time.
-3. **Relationship hypotheses** - dashed edges for reproducible signals such as a common funder and
-   close funding time.
-4. **Likely endpoint candidates** - meaningful paths followed outward from the seed and ranked by
-   where the observed trail stops, transfer repetition, asset breadth, and value prominence.
-5. **Explicit limits** - a warning whenever an RPC transaction cap means the graph is incomplete.
-6. **Investigation workspaces** - functional wallet, relationship, timeline, and evidence views in
-   addition to the graph.
+1. **Answer** - the best stopping wallet, its full address, and three reasons it ranked first.
+2. **Wallets found** - the starting wallet and every wallet reached in this scan.
+3. **Transactions** - the actual money movements in time order.
+4. **Possible links** - investigative clues kept separate from real transfers.
+5. **Raw proof** - transaction hashes, blocks or slots, timestamps, amounts, and explorer links.
 
-Clicking a transfer shows the transaction evidence. Clicking a dashed relationship shows each signal,
-its exact contribution to the evidence score, and the evidence IDs used. Clicking a wallet shows its
+Clicking a transaction shows its amount, time, signature, and evidence. Clicking a possible link shows
+each signal, its exact contribution to the clue-strength score, and the evidence IDs used. Clicking a wallet shows its
 observed incoming/outgoing activity and offers a bounded recursive expansion.
 
 ## Current capabilities
@@ -92,8 +98,10 @@ observed incoming/outgoing activity and offers a bounded recursive expansion.
 | Capability | Status | Meaning |
 | --- | --- | --- |
 | Solana wallet/mint input | Available | Trace a bounded address-referenced transaction slice |
-| EVM `0x` wallet input | Available | Ethereum, Base, BNB, Polygon, Arbitrum, Optimism, and Avalanche |
-| Keyless EVM history | Available | Native and ERC-20 transfers through Routescan's public indexed API |
+| EVM `0x` wallet input | Available | Ethereum, Base, BNB, Polygon, Arbitrum, Optimism, Avalanche, and Robinhood Chain |
+| Robinhood Chain | Available | Native ETH and token transfers from its public Blockscout index |
+| BNB Smart Chain | Available | Recent native BNB movements through 3xpl's public BNB index |
+| Keyless EVM history | Available | Uses public Routescan, Blockscout, and 3xpl indexes; no user API key needed |
 | Real mainnet RPC ingestion | Available | Paces calls, honors `Retry-After`, and preserves partial results |
 | SOL transfers | Available | Parses supported System Program transfers |
 | SPL-token transfers | Available | Parses supported SPL Token instructions and inner instructions |
@@ -119,10 +127,10 @@ Endpoint deliberately separates facts from inference:
 
 | Visual / class | Interpretation |
 | --- | --- |
-| Solid directed edge / `confirmed_fact` | A supported transfer instruction was observed on-chain |
-| Dashed edge / `heuristic_relationship` | Observable signals support a relationship worth inspecting |
-| Diamond node | Possible convergence point inside this bounded graph |
-| Evidence score | Strength of configured signals, **not** an ownership probability |
+| Solid directed edge / `confirmed_fact` | Money moved in a supported public transaction |
+| Possible link | A clue worth checking, not proof that wallets share an owner |
+| Diamond node | A possible stopping wallet in this scan |
+| Clue strength | Strength of the observed clues, **not** a probability |
 | Truncation warning | RPC limits were reached; the result is incomplete |
 
 A shared funder can be an exchange, payroll wallet, airdrop distributor, relayer, or ordinary user.
@@ -140,7 +148,7 @@ wallets that reconverge before a final transfer. The UI marks the fixture as **n
 Use it to learn the interface:
 
 1. Select a solid arrow and inspect its evidence.
-2. Select a dashed relationship and inspect common-funder/timing contributions.
+2. Open **Possible links**, select one, and inspect the common-funder/timing clues.
 3. Select the diamond wallet and read why it is a consolidation candidate.
 4. Compare the language used for a confirmed fact and a heuristic.
 
@@ -228,8 +236,8 @@ FastAPI application
     |     |-- JSON-RPC retrieval
     |     '-- System/SPL instruction normalization
     '-- EVM adapters
-          |-- keyless indexed history retrieval
-          '-- native/ERC-20 normalization
+          |-- Routescan, Blockscout, and 3xpl public history
+          '-- native/token transfer normalization
 ```
 
 The packaged executable embeds the production UI and FastAPI service in one local process. Endpoint
@@ -258,7 +266,8 @@ Read more:
 - Public Solana RPC endpoints frequently rate-limit sustained investigations.
 - The same EVM address may have different activity on each network; Endpoint does not assume that
   an Ethereum result also represents Base, BNB Smart Chain, or another EVM chain.
-- The keyless EVM indexer can rate-limit or omit a newly submitted transaction while it is indexing.
+- BNB tracing currently follows native BNB movements. BEP-20 transfer indexing is not yet included.
+- Public EVM indexes can rate-limit or omit a newly submitted transaction while it is indexing.
 - Token-account ownership depends on transaction token-balance metadata when present.
 - Scores are interpretable indices and have not yet been calibrated as probabilities.
 - SQLite is appropriate for a local single-user app, not a shared multi-user deployment.

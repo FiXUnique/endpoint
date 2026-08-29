@@ -81,18 +81,18 @@ describe("Endpoint app", () => {
     render(<App />);
     fireEvent.click(screen.getByRole("button", { name: /open synthetic demo/i }));
     await screen.findByLabelText("Interactive fund-flow graph");
-    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("Funds arrived here");
+    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("Money arrived");
     expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("1 SOL");
-    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("The observed trail stops here");
+    expect(screen.getByLabelText("Likely endpoint")).toHaveTextContent("The money trail stops at this wallet");
 
-    fireEvent.click(screen.getByRole("button", { name: /wallets 1/i }));
-    expect(screen.getByLabelText("Observed wallets")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /relationships 1/i }));
-    expect(screen.getByLabelText("Relationships")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /timeline 1/i }));
-    expect(screen.getByLabelText("Transaction timeline")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /evidence 1/i }));
-    expect(screen.getByLabelText("Evidence ledger")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /wallets found 1/i }));
+    expect(screen.getByLabelText("Wallets found")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /possible links 0/i }));
+    expect(screen.getByText(/No extra wallet links were suggested/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /transactions 1/i }));
+    expect(screen.getByLabelText("Transactions")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /raw proof 1/i }));
+    expect(screen.getByLabelText("Raw proof")).toBeInTheDocument();
   });
 
   it("offers a smaller retry when the RPC reports a retryable failure", async () => {
@@ -129,7 +129,7 @@ describe("Endpoint app", () => {
       chain: "solana",
       signature_limit: 10,
     });
-    expect(screen.getByText("No supported transfers in this transaction slice")).toBeInTheDocument();
+    expect(screen.getByText("No money trail was found in this scan")).toBeInTheDocument();
   });
 
   it("accepts a 0x address and sends the selected EVM network", async () => {
@@ -165,12 +165,19 @@ describe("Endpoint app", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Trace funds" }));
 
-    await screen.findByText("No supported transfers in this transaction slice");
+    await screen.findByText("No money trail was found in this scan");
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toMatchObject({
       chain: "ethereum",
       address: "0xec149f3cdb488e4001fba55b9114f89139fd3577",
     });
     expect(screen.getAllByText("Ethereum mainnet").length).toBeGreaterThan(0);
-    expect(screen.getByText(/No endpoint can be identified/)).toBeInTheDocument();
+    expect(screen.getByText(/There is no stopping wallet to show yet/)).toBeInTheDocument();
+  });
+
+  it("offers working BNB and Robinhood network choices", () => {
+    render(<App />);
+    const network = screen.getByLabelText("Blockchain network");
+    expect(network).toHaveTextContent("BNB Smart Chain");
+    expect(network).toHaveTextContent("Robinhood Chain");
   });
 });

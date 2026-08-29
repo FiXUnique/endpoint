@@ -17,6 +17,7 @@ const NETWORKS: Array<{ id: SupportedChain; name: string; short: string }> = [
   { id: "arbitrum", name: "Arbitrum One", short: "ARB" },
   { id: "optimism", name: "Optimism", short: "OP" },
   { id: "avalanche", name: "Avalanche C-Chain", short: "AVAX" },
+  { id: "robinhood", name: "Robinhood Chain", short: "HOOD" },
 ];
 
 function networkName(chain: string): string {
@@ -195,7 +196,7 @@ export default function App() {
           <section className="welcome-copy">
             <div className="kicker"><span /> EVIDENCE BEFORE INFERENCE</div>
             <h1>Follow the money.<br /><em>Question the conclusion.</em></h1>
-            <p>Trace public Solana and EVM transfers, then see the strongest endpoint wallet without digging through a wall of addresses.</p>
+            <p>Paste a wallet. Endpoint follows its public transfers and shows, in plain English, where the money trail appears to stop.</p>
             <div className="welcome-actions">
               <button className="primary-button large" onClick={() => document.querySelector<HTMLInputElement>(".search-form input")?.focus()}>Start with an address</button>
               <button className="secondary-button large" disabled={loading} onClick={openDemo}>Open synthetic demo</button>
@@ -207,18 +208,18 @@ export default function App() {
             </div>
           </section>
           <aside className="method-card">
-            <span className="eyebrow">Method</span>
-            <div className="method-flow"><b>Evidence</b><i>→</i><b>Relationships</b><i>→</i><b>Hypotheses</b></div>
-            <p>Endpoint never turns correlation into certainty. Heuristic relationships remain dashed, scored, and explainable.</p>
-            <div className="method-rule"><span className="status-dot confirmed" /><div><strong>Confirmed fact</strong><small>Directly parsed from a transaction</small></div></div>
-            <div className="method-rule"><span className="status-dot heuristic" /><div><strong>Heuristic relationship</strong><small>Reproducible signals, not attribution</small></div></div>
+            <span className="eyebrow">What happens</span>
+            <div className="method-flow"><b>Start</b><i>→</i><b>Follow money</b><i>→</i><b>Find the stop</b></div>
+            <p>An endpoint is simply the last wallet in the scanned trail that received money and did not send a meaningful amount onward.</p>
+            <div className="method-rule"><span className="status-dot confirmed" /><div><strong>Solid line = real transfer</strong><small>Read directly from the public blockchain</small></div></div>
+            <div className="method-rule"><span className="status-dot heuristic" /><div><strong>Possible link = clue only</strong><small>Useful for investigation, never proof of ownership</small></div></div>
           </aside>
         </main>
       ) : (
         <main className="investigation-layout">
           <aside className="case-sidebar">
             <div className="case-heading">
-              <span className="eyebrow">Active investigation</span>
+              <span className="eyebrow">Starting wallet</span>
               <h1>{investigation.name}</h1>
               <code>{shortAddress(investigation.seed)}</code>
             </div>
@@ -231,20 +232,20 @@ export default function App() {
             </div>
             {investigation.limits.notice && <div className="limit-notice">{investigation.limits.notice}</div>}
             <nav className="case-nav" aria-label="Investigation sections">
-              <button className={section === "fund-flow" ? "active" : ""} onClick={() => setSection("fund-flow")}><span>⌘</span> Fund flow <b>{investigation.edges.filter((edge) => edge.certainty === "confirmed_fact" && !edge.probable_noise).length}</b></button>
-              <button className={section === "wallets" ? "active" : ""} onClick={() => setSection("wallets")}><span>◫</span> Wallets <b>{investigation.nodes.length}</b></button>
-              <button className={section === "relationships" ? "active" : ""} onClick={() => setSection("relationships")}><span>⌁</span> Relationships <b>{investigation.edges.filter((edge) => !edge.probable_noise).length}</b></button>
-              <button className={section === "timeline" ? "active" : ""} onClick={() => setSection("timeline")}><span>◷</span> Timeline <b>{investigation.evidence.length}</b></button>
-              <button className={section === "evidence" ? "active" : ""} onClick={() => setSection("evidence")}><span>✓</span> Evidence <b>{investigation.evidence.length}</b></button>
+              <button className={section === "fund-flow" ? "active" : ""} onClick={() => setSection("fund-flow")}><span>◎</span> Answer <b>1</b></button>
+              <button className={section === "wallets" ? "active" : ""} onClick={() => setSection("wallets")}><span>◫</span> Wallets found <b>{investigation.nodes.length}</b></button>
+              <button className={section === "timeline" ? "active" : ""} onClick={() => setSection("timeline")}><span>◷</span> Transactions <b>{investigation.evidence.length}</b></button>
+              <button className={section === "relationships" ? "active" : ""} onClick={() => setSection("relationships")}><span>⌁</span> Possible links <b>{investigation.edges.filter((edge) => edge.certainty !== "confirmed_fact" && !edge.probable_noise).length}</b></button>
+              <button className={section === "evidence" ? "active" : ""} onClick={() => setSection("evidence")}><span>✓</span> Raw proof <b>{investigation.evidence.length}</b></button>
             </nav>
             <section className="candidate-section">
-              <div className="section-title"><h3>Endpoint candidates</h3><span>{investigation.exit_candidates.length}</span></div>
+              <div className="section-title"><h3>Possible stopping points</h3><span>{investigation.exit_candidates.length}</span></div>
               {investigation.exit_candidates.length ? investigation.exit_candidates.slice(0, 3).map((candidate, index) => (
                 <button className="candidate-row" key={candidate.address} onClick={() => {
                   const node = investigation.nodes.find((item) => item.address === candidate.address);
                   if (node) setSelection({ kind: "node", value: node });
                 }}>
-                  <b>0{index + 1}</b><div><code>{shortAddress(candidate.address)}</code><small>{candidate.terminal_in_observed_graph ? "Trail stops here" : "Funds move onward"} / {candidate.incoming_transfer_count} meaningful transfer{candidate.incoming_transfer_count === 1 ? "" : "s"}</small></div><strong>{Math.round(candidate.evidence_score * 100)}</strong>
+                  <b>0{index + 1}</b><div><code>{shortAddress(candidate.address)}</code><small>{candidate.terminal_in_observed_graph ? "Money trail stops here" : "Money moves onward"}</small></div><strong title="Clue strength, not certainty">{Math.round(candidate.evidence_score * 100)}</strong>
                 </button>
               )) : <p className="muted">No meaningful outgoing trail was found from the seed in this slice.</p>}
             </section>
